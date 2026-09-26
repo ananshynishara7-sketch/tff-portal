@@ -72,7 +72,7 @@ type CallLogEntry = {
 // Same names/order as the Masterplan Phase 3 facilitator dropdown, plus
 // Lead Facilitator (matches who's allowed to make these calls).
 const CALL_LOG_CALLERS = [
-  'Lead Facilitator', 'Suba', 'Jeyastan', 'Nishara', 'Gajan', 'Jenny',
+  'Lead Facilitator', 'Jeyastan', 'Nishara', 'Gajan', 'Jenny',
   'Rageethan', 'Thuvarahan', 'Dakshika', 'Jericksha', 'Suganya',
 ]
 
