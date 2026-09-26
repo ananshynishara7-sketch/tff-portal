@@ -54,6 +54,14 @@ type LeaveRow = {
   decided_by_name: string | null
 }
 
+type FollowUpRow = {
+  id: string
+  full_name: string
+  family_name: string
+  mark: string
+  why: string
+}
+
 const todayISO = () => new Date().toISOString().slice(0, 10)
 
 export default function AdminDashboard() {
@@ -67,6 +75,7 @@ export default function AdminDashboard() {
   const [dayFamilyRows, setDayFamilyRows] = useState<DayFamilyRow[]>([])
   const [termFamilyRows, setTermFamilyRows] = useState<TermFamilyRow[]>([])
   const [leaveRows, setLeaveRows] = useState<LeaveRow[]>([])
+  const [followUpRows, setFollowUpRows] = useState<FollowUpRow[]>([])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -81,12 +90,12 @@ export default function AdminDashboard() {
     ] = await Promise.all([
       supabase.from('participants').select('*', { count: 'exact', head: true }).eq('status', 'Active'),
       supabase.from('families').select('id, name, display_color').order('name'),
-      supabase.from('participants').select('id, family_id').eq('status', 'Active'),
+      supabase.from('participants').select('id, full_name, family_id').eq('status', 'Active'),
       supabase.from('attendance_records').select('participant_id, code').eq('date', date),
       supabase.from('attendance_records').select('participant_id, code'),
       supabase
         .from('leave_requests')
-        .select('id, request_type, reason, status, participants(full_name, family_id, families(name)), decided_by:profiles(full_name)')
+        .select('id, participant_id, request_type, reason, status, participants(full_name, family_id, families(name)), decided_by:profiles(full_name)')
         .lte('leave_start_date', date)
         .gte('leave_end_date', date),
     ])
@@ -202,13 +211,15 @@ export default function AdminDashboard() {
     // ---- Leave requests for this day ----
     type LeaveJoinRow = {
       id: string
+      participant_id: string
       request_type: string
       reason: string | null
       status: string
       participants: { full_name: string; families: { name: string } | null } | null
       decided_by: { full_name: string } | null
     }
-    const leaves: LeaveRow[] = ((leaveRequests as unknown as LeaveJoinRow[]) ?? []).map((r) => ({
+    const leaveRequestRows = (leaveRequests as unknown as LeaveJoinRow[]) ?? []
+    const leaves: LeaveRow[] = leaveRequestRows.map((r) => ({
       id: r.id,
       participant_name: r.participants?.full_name ?? 'Unknown',
       family_name: r.participants?.families?.name ?? '—',
@@ -219,6 +230,29 @@ export default function AdminDashboard() {
     }))
     setLeaveRows(leaves)
 
+    // ---- Needs Following Up ----
+    // Anyone absent this day (marked Authorised/Not Authorised, or not marked
+    // at all) who has no leave request covering this date at all. Once a
+    // leave request exists for them, it's already handled above instead.
+    const participantIdsWithRequest = new Set(leaveRequestRows.map((r) => r.participant_id))
+    const familyNameById: Record<string, string> = {}
+    for (const f of families ?? []) familyNameById[f.id] = f.name
+
+    const followUps: FollowUpRow[] = []
+    for (const p of participants ?? []) {
+      if (participantIdsWithRequest.has(p.id)) continue
+      const code = dayCodeByParticipant[p.id]
+      if (code !== 'A' && code !== 'N' && code) continue // present/late/half-day marks don't need follow-up
+      followUps.push({
+        id: p.id,
+        full_name: p.full_name,
+        family_name: p.family_id ? familyNameById[p.family_id] ?? '—' : '—',
+        mark: code === 'A' ? 'Authorised Absence' : code === 'N' ? 'Not Authorised' : 'Not Marked',
+        why: 'No leave request',
+      })
+    }
+    setFollowUpRows(followUps)
+
     setLoading(false)
   }, [date, supabase])
 
@@ -227,7 +261,7 @@ export default function AdminDashboard() {
   }, [load])
 
   return (
-    <DashboardShell roleLabel="Administration" navItems={navItems}>
+    <DashboardShell roleLabel="Participants Attendance Dashboard" navItems={navItems}>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold text-gray-900">Participants Attendance Dashboard</h1>
         <div>
@@ -387,6 +421,41 @@ export default function AdminDashboard() {
             )}
           </tbody>
         </table>
+      </div>
+
+      <h2 className="mb-3 mt-8 text-lg font-semibold text-gray-900">Needs Following Up</h2>
+      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+            <tr>
+              <th className="px-4 py-3">Name</th>
+              <th className="px-4 py-3">Family</th>
+              <th className="px-4 py-3">Mark</th>
+              <th className="px-4 py-3">Why Follow Up</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {followUpRows.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-4 py-6 text-center text-gray-400">
+                  Nobody needs following up for this day.
+                </td>
+              </tr>
+            ) : (
+              followUpRows.map((r) => (
+                <tr key={r.id}>
+                  <td className="px-4 py-3 font-medium text-gray-900">{r.full_name}</td>
+                  <td className="px-4 py-3">{r.family_name}</td>
+                  <td className="px-4 py-3">{r.mark}</td>
+                  <td className="px-4 py-3">{r.why}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+        <p className="border-t border-gray-100 px-4 py-2 text-xs text-gray-400">
+          Absent or not-marked participants with no leave request on file for this day.
+        </p>
       </div>
     </DashboardShell>
   )
