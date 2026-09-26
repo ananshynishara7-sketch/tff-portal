@@ -29,9 +29,24 @@ const CODES = [
 type Participant = { id: string; full_name: string }
 type AttendanceMap = Record<string, string> // participant_id -> code
 
+function isWeekend(isoDate: string): boolean {
+  const day = new Date(isoDate + 'T00:00:00Z').getUTCDay() // 0 = Sunday, 6 = Saturday
+  return day === 0 || day === 6
+}
+
+// If today is a Saturday or Sunday, start on the most recent weekday instead
+// (classes only run Monday-Friday), so the page doesn't open on a non-class day.
+function defaultDate(): string {
+  const d = new Date()
+  while (d.getDay() === 0 || d.getDay() === 6) {
+    d.setDate(d.getDate() - 1)
+  }
+  return d.toISOString().slice(0, 10)
+}
+
 export default function AdminAttendancePage() {
   const supabase = createClient()
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(defaultDate)
   const [participants, setParticipants] = useState<Participant[]>([])
   const [attendance, setAttendance] = useState<AttendanceMap>({})
   const [loading, setLoading] = useState(true)
@@ -68,7 +83,16 @@ export default function AdminAttendancePage() {
     loadData()
   }, [loadData])
 
+  function handleDateChange(newDate: string) {
+    if (isWeekend(newDate)) {
+      alert("That's a Saturday or Sunday - classes only run on weekdays, so attendance can't be marked for that day.")
+      return
+    }
+    setDate(newDate)
+  }
+
   async function markAttendance(participantId: string, code: string) {
+    if (isWeekend(date)) return
     setSavingId(participantId)
 
     const { data: userData } = await supabase.auth.getUser()
@@ -89,6 +113,7 @@ export default function AdminAttendancePage() {
   }
 
   async function clearAllForDay() {
+    if (isWeekend(date)) return
     const markedCount = Object.keys(attendance).length
     if (markedCount === 0) {
       alert('Nothing is marked for this day yet.')
@@ -127,12 +152,12 @@ export default function AdminAttendancePage() {
           <input
             type="date"
             value={date}
-            onChange={(e) => setDate(e.target.value)}
+            onChange={(e) => handleDateChange(e.target.value)}
             className="rounded-md border border-gray-300 px-3 py-1.5 text-sm"
           />
           <button
             onClick={clearAllForDay}
-            disabled={clearing || loading}
+            disabled={clearing || loading || isWeekend(date)}
             className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
           >
             {clearing ? 'Clearing...' : 'Clear All for This Day'}
@@ -184,7 +209,7 @@ export default function AdminAttendancePage() {
                         <button
                           key={c.value}
                           onClick={() => markAttendance(p.id, c.value)}
-                          disabled={savingId === p.id}
+                          disabled={savingId === p.id || isWeekend(date)}
                           className={`rounded-md border px-2.5 py-1 text-xs font-medium disabled:opacity-50 ${
                             attendance[p.id] === c.value
                               ? c.color
