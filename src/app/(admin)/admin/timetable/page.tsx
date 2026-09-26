@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import DashboardShell from '@/components/DashboardShell'
 import { createClient } from '@/lib/supabase/client'
 
@@ -16,8 +16,25 @@ const navItems = [
   { label: 'Settings', href: '/admin/settings' },
 ]
 
-type Family = { id: string; name: string; display_color: string }
-type Facilitator = { id: string; full_name: string }
+// Fixed facilitator list, in the order requested - not tied to login
+// accounts, since facilitators don't have logins yet.
+const FACILITATORS = [
+  'Suba', 'Jeyastan', 'Nishara', 'Gajan', 'Jenny',
+  'Rageethan', 'Thuvarahan', 'Dakshika', 'Jericksha',
+]
+
+// The rotating groups used in the Phase 3 schedule - a separate concept
+// from the attendance Families. Each gets its own colour so a day's
+// parallel activities are easy to tell apart at a glance.
+const GROUPS: { name: string; badge: string; dot: string }[] = [
+  { name: 'Spartans', badge: 'bg-red-100 text-red-800 border-red-300', dot: 'bg-red-500' },
+  { name: 'Thebans', badge: 'bg-blue-100 text-blue-800 border-blue-300', dot: 'bg-blue-500' },
+  { name: 'Athenians', badge: 'bg-emerald-100 text-emerald-800 border-emerald-300', dot: 'bg-emerald-500' },
+]
+const GROUP_STYLE: Record<string, { badge: string; dot: string }> = Object.fromEntries(
+  GROUPS.map((g) => [g.name, g])
+)
+const EVERYONE_STYLE = { badge: 'bg-gray-100 text-gray-700 border-gray-300', dot: 'bg-gray-400' }
 
 type SessionRow = {
   id: string
@@ -25,80 +42,54 @@ type SessionRow = {
   date: string
   start_time: string
   end_time: string
-  family_id: string | null
-  family_name: string | null
-  family_color: string | null
-  facilitator_id: string | null
+  group_name: string | null
   facilitator_name: string | null
 }
 
 const todayISO = () => new Date().toISOString().slice(0, 10)
+const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
+function addDays(iso: string, n: number) {
+  const d = new Date(iso + 'T00:00:00Z')
+  d.setUTCDate(d.getUTCDate() + n)
+  return d.toISOString().slice(0, 10)
+}
+
+function startOfWeek(iso: string) {
+  const d = new Date(iso + 'T00:00:00Z')
+  const day = d.getUTCDay() // 0 = Sunday
+  const diffToMonday = day === 0 ? -6 : 1 - day
+  d.setUTCDate(d.getUTCDate() + diffToMonday)
+  return d.toISOString().slice(0, 10)
+}
 
 export default function AdminTimetablePage() {
   const supabase = createClient()
-  const [families, setFamilies] = useState<Family[]>([])
-  const [facilitators, setFacilitators] = useState<Facilitator[]>([])
-  const [sessions, setSessions] = useState<SessionRow[]>([])
+  const [date, setDate] = useState(todayISO())
+  const [allSessions, setAllSessions] = useState<SessionRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [showPast, setShowPast] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const emptyForm = {
     title: '',
-    date: todayISO(),
+    date,
     start_time: '09:00',
     end_time: '10:00',
-    family_id: '' as string,
-    facilitator_id: '' as string,
+    group_name: '',
+    facilitator_name: '',
   }
   const [form, setForm] = useState(emptyForm)
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [{ data: familiesData }, { data: facilitatorsData }, { data: sessionsData }] =
-      await Promise.all([
-        supabase.from('families').select('id, name, display_color').order('name'),
-        supabase
-          .from('profiles')
-          .select('id, full_name')
-          .in('role', ['facilitator', 'facilitator_support', 'lead_facilitator'])
-          .order('full_name'),
-        supabase
-          .from('sessions')
-          .select('id, title, date, start_time, end_time, family_id, facilitator_id, families(name, display_color), facilitator:profiles(full_name)')
-          .order('date')
-          .order('start_time'),
-      ])
-
-    setFamilies(familiesData ?? [])
-    setFacilitators(facilitatorsData ?? [])
-
-    type JoinRow = {
-      id: string
-      title: string
-      date: string
-      start_time: string
-      end_time: string
-      family_id: string | null
-      facilitator_id: string | null
-      families: { name: string; display_color: string } | null
-      facilitator: { full_name: string } | null
-    }
-    const rows: SessionRow[] = ((sessionsData as unknown as JoinRow[]) ?? []).map((s) => ({
-      id: s.id,
-      title: s.title,
-      date: s.date,
-      start_time: s.start_time,
-      end_time: s.end_time,
-      family_id: s.family_id,
-      family_name: s.families?.name ?? null,
-      family_color: s.families?.display_color ?? null,
-      facilitator_id: s.facilitator_id,
-      facilitator_name: s.facilitator?.full_name ?? null,
-    }))
-    setSessions(rows)
+    const { data } = await supabase
+      .from('sessions')
+      .select('id, title, date, start_time, end_time, group_name, facilitator_name')
+      .order('date')
+      .order('start_time')
+    setAllSessions(data ?? [])
     setLoading(false)
   }, [supabase])
 
@@ -108,7 +99,7 @@ export default function AdminTimetablePage() {
 
   function startAdd() {
     setEditingId('new')
-    setForm(emptyForm)
+    setForm({ ...emptyForm, date })
     setError(null)
   }
 
@@ -119,8 +110,8 @@ export default function AdminTimetablePage() {
       date: row.date,
       start_time: row.start_time.slice(0, 5),
       end_time: row.end_time.slice(0, 5),
-      family_id: row.family_id ?? '',
-      facilitator_id: row.facilitator_id ?? '',
+      group_name: row.group_name ?? '',
+      facilitator_name: row.facilitator_name ?? '',
     })
     setError(null)
   }
@@ -148,8 +139,8 @@ export default function AdminTimetablePage() {
       date: form.date,
       start_time: form.start_time,
       end_time: form.end_time,
-      family_id: form.family_id || null,
-      facilitator_id: form.facilitator_id || null,
+      group_name: form.group_name || null,
+      facilitator_name: form.facilitator_name || null,
     }
 
     if (editingId === 'new') {
@@ -169,28 +160,108 @@ export default function AdminTimetablePage() {
     load()
   }
 
-  const visibleSessions = showPast ? sessions : sessions.filter((s) => s.date >= todayISO())
+  const weekStart = useMemo(() => startOfWeek(date), [date])
+  const weekDays = useMemo(() => Array.from({ length: 5 }, (_, i) => addDays(weekStart, i)), [weekStart])
+  const sessionCountByDate = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const s of allSessions) counts[s.date] = (counts[s.date] ?? 0) + 1
+    return counts
+  }, [allSessions])
+
+  const daySessions = useMemo(
+    () => allSessions.filter((s) => s.date === date).sort((a, b) => a.start_time.localeCompare(b.start_time)),
+    [allSessions, date]
+  )
+
+  // Group sessions that share the same start time, so parallel activities
+  // (e.g. three groups' English Language rotation) show together.
+  const timeBlocks = useMemo(() => {
+    const blocks: { start: string; end: string; rows: SessionRow[] }[] = []
+    for (const s of daySessions) {
+      const last = blocks[blocks.length - 1]
+      if (last && last.start === s.start_time) {
+        last.rows.push(s)
+      } else {
+        blocks.push({ start: s.start_time, end: s.end_time, rows: [s] })
+      }
+    }
+    return blocks
+  }, [daySessions])
 
   return (
     <DashboardShell roleLabel="Participants Attendance Dashboard" navItems={navItems}>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold text-gray-900">Timetable</h1>
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-1.5 text-sm text-gray-600">
-            <input
-              type="checkbox"
-              checked={showPast}
-              onChange={(e) => setShowPast(e.target.checked)}
-            />
-            Show past sessions
-          </label>
-          <button
-            onClick={startAdd}
-            className="rounded-md bg-[#022269] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
-          >
-            + Add Session
-          </button>
-        </div>
+        <button
+          onClick={startAdd}
+          className="rounded-md bg-[#022269] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
+        >
+          + Add Session
+        </button>
+      </div>
+
+      {/* Colour legend */}
+      <div className="mb-4 flex flex-wrap items-center gap-3 text-xs text-gray-500">
+        <span>Groups:</span>
+        {GROUPS.map((g) => (
+          <span key={g.name} className="flex items-center gap-1.5">
+            <span className={`h-2.5 w-2.5 rounded-full ${g.dot}`} />
+            {g.name}
+          </span>
+        ))}
+        <span className="flex items-center gap-1.5">
+          <span className={`h-2.5 w-2.5 rounded-full ${EVERYONE_STYLE.dot}`} />
+          Everyone
+        </span>
+      </div>
+
+      {/* Week strip - quick day navigation */}
+      <div className="mb-6 flex flex-wrap items-center gap-2">
+        <button
+          onClick={() => setDate(addDays(date, -7))}
+          className="rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
+        >
+          ‹ Week
+        </button>
+        {weekDays.map((d) => {
+          const isSelected = d === date
+          const count = sessionCountByDate[d] ?? 0
+          return (
+            <button
+              key={d}
+              onClick={() => setDate(d)}
+              className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${
+                isSelected
+                  ? 'border-[#022269] bg-[#022269] text-white'
+                  : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              {dayNames[new Date(d + 'T00:00:00Z').getUTCDay()].slice(0, 3)}{' '}
+              {d.slice(8, 10)}/{d.slice(5, 7)}
+              {count > 0 && (
+                <span
+                  className={`ml-1.5 rounded-full px-1.5 text-xs ${
+                    isSelected ? 'bg-white/20' : 'bg-gray-100 text-gray-500'
+                  }`}
+                >
+                  {count}
+                </span>
+              )}
+            </button>
+          )
+        })}
+        <button
+          onClick={() => setDate(addDays(date, 7))}
+          className="rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
+        >
+          Week ›
+        </button>
+        <input
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          className="ml-auto rounded-md border border-gray-300 px-3 py-1.5 text-sm"
+        />
       </div>
 
       {editingId && (
@@ -205,7 +276,7 @@ export default function AdminTimetablePage() {
                 type="text"
                 value={form.title}
                 onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                placeholder="e.g. English Class"
+                placeholder="e.g. English Language"
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#022269] focus:outline-none sm:w-96"
               />
             </div>
@@ -242,16 +313,16 @@ export default function AdminTimetablePage() {
 
             <div className="flex flex-wrap gap-4">
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Family</label>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Group</label>
                 <select
-                  value={form.family_id}
-                  onChange={(e) => setForm((f) => ({ ...f, family_id: e.target.value }))}
+                  value={form.group_name}
+                  onChange={(e) => setForm((f) => ({ ...f, group_name: e.target.value }))}
                   className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#022269] focus:outline-none sm:w-56"
                 >
                   <option value="">Everyone</option>
-                  {families.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.name}
+                  {GROUPS.map((g) => (
+                    <option key={g.name} value={g.name}>
+                      {g.name}
                     </option>
                   ))}
                 </select>
@@ -259,14 +330,14 @@ export default function AdminTimetablePage() {
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">Facilitator</label>
                 <select
-                  value={form.facilitator_id}
-                  onChange={(e) => setForm((f) => ({ ...f, facilitator_id: e.target.value }))}
+                  value={form.facilitator_name}
+                  onChange={(e) => setForm((f) => ({ ...f, facilitator_name: e.target.value }))}
                   className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#022269] focus:outline-none sm:w-56"
                 >
                   <option value="">Not assigned yet</option>
-                  {facilitators.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.full_name}
+                  {FACILITATORS.map((f) => (
+                    <option key={f} value={f}>
+                      {f}
                     </option>
                   ))}
                 </select>
@@ -295,74 +366,65 @@ export default function AdminTimetablePage() {
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-            <tr>
-              <th className="px-4 py-3">Date</th>
-              <th className="px-4 py-3">Time</th>
-              <th className="px-4 py-3">Title</th>
-              <th className="px-4 py-3">Family</th>
-              <th className="px-4 py-3">Facilitator</th>
-              <th className="px-4 py-3">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {loading ? (
-              <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
-                  Loading...
-                </td>
-              </tr>
-            ) : visibleSessions.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
-                  {showPast ? 'No sessions yet.' : 'No upcoming sessions. Add one above.'}
-                </td>
-              </tr>
-            ) : (
-              visibleSessions.map((s) => (
-                <tr key={s.id}>
-                  <td className="px-4 py-3">{s.date}</td>
-                  <td className="px-4 py-3">
-                    {s.start_time.slice(0, 5)}–{s.end_time.slice(0, 5)}
-                  </td>
-                  <td className="px-4 py-3 font-medium text-gray-900">{s.title}</td>
-                  <td className="px-4 py-3">
-                    {s.family_name ? (
-                      <span
-                        className="rounded-full border px-2 py-1 text-xs font-medium"
-                        style={{ borderColor: s.family_color ?? '#ccc', color: s.family_color ?? '#333' }}
-                      >
-                        {s.family_name}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-gray-400">Everyone</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">{s.facilitator_name ?? '—'}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => startEdit(s)}
-                        className="text-xs font-medium text-[#022269] hover:underline"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => deleteSession(s.id)}
-                        className="text-xs font-medium text-red-600 hover:underline"
-                      >
-                        Delete
-                      </button>
+      <h2 className="mb-3 text-lg font-semibold text-gray-900">
+        {dayNames[new Date(date + 'T00:00:00Z').getUTCDay()]}, {date}
+      </h2>
+
+      {loading ? (
+        <p className="text-sm text-gray-500">Loading...</p>
+      ) : timeBlocks.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-400">
+          Nothing on the timetable for this day yet.
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {timeBlocks.map((block) => (
+            <div key={block.start} className="flex gap-4">
+              <div className="w-20 shrink-0 pt-3 text-right text-xs font-medium text-gray-500">
+                {block.start.slice(0, 5)}
+                <br />–<br />
+                {block.end.slice(0, 5)}
+              </div>
+              <div className="flex-1 space-y-2">
+                {block.rows.map((s) => {
+                  const style = s.group_name ? GROUP_STYLE[s.group_name] ?? EVERYONE_STYLE : EVERYONE_STYLE
+                  return (
+                    <div
+                      key={s.id}
+                      className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 shadow-sm ${style.badge}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${style.dot}`} />
+                        <div>
+                          <p className="font-medium">{s.title}</p>
+                          <p className="text-xs opacity-80">
+                            {s.group_name ?? 'Everyone'}
+                            {s.facilitator_name ? ` · ${s.facilitator_name}` : ''}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => startEdit(s)}
+                          className="text-xs font-medium underline opacity-80 hover:opacity-100"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => deleteSession(s.id)}
+                          className="text-xs font-medium underline opacity-80 hover:opacity-100"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </DashboardShell>
   )
 }

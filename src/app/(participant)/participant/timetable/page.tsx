@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import DashboardShell from '@/components/DashboardShell'
 import { createClient } from '@/lib/supabase/client'
 
@@ -13,16 +13,25 @@ const navItems = [
   { label: 'My Profile', href: '/participant/profile' },
 ]
 
+const GROUP_STYLE: Record<string, { badge: string; dot: string }> = {
+  Spartans: { badge: 'bg-red-100 text-red-800 border-red-300', dot: 'bg-red-500' },
+  Thebans: { badge: 'bg-blue-100 text-blue-800 border-blue-300', dot: 'bg-blue-500' },
+  Athenians: { badge: 'bg-emerald-100 text-emerald-800 border-emerald-300', dot: 'bg-emerald-500' },
+}
+const EVERYONE_STYLE = { badge: 'bg-gray-100 text-gray-700 border-gray-300', dot: 'bg-gray-400' }
+
 type SessionRow = {
   id: string
   title: string
   date: string
   start_time: string
   end_time: string
+  group_name: string | null
   facilitator_name: string | null
 }
 
 const todayISO = () => new Date().toISOString().slice(0, 10)
+const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
 export default function ParticipantTimetablePage() {
   const supabase = createClient()
@@ -50,37 +59,14 @@ export default function ParticipantTimetablePage() {
       return
     }
 
-    // Sessions that apply to everyone (no family set) or to this
-    // participant's own family, from today onward.
-    const orFilter = participant.family_id
-      ? `family_id.is.null,family_id.eq.${participant.family_id}`
-      : 'family_id.is.null'
-
     const { data } = await supabase
       .from('sessions')
-      .select('id, title, date, start_time, end_time, facilitator:profiles(full_name)')
+      .select('id, title, date, start_time, end_time, group_name, facilitator_name')
       .gte('date', todayISO())
-      .or(orFilter)
       .order('date')
       .order('start_time')
 
-    type JoinRow = {
-      id: string
-      title: string
-      date: string
-      start_time: string
-      end_time: string
-      facilitator: { full_name: string } | null
-    }
-    const rows: SessionRow[] = ((data as unknown as JoinRow[]) ?? []).map((s) => ({
-      id: s.id,
-      title: s.title,
-      date: s.date,
-      start_time: s.start_time,
-      end_time: s.end_time,
-      facilitator_name: s.facilitator?.full_name ?? null,
-    }))
-    setSessions(rows)
+    setSessions(data ?? [])
     setLoading(false)
   }, [supabase])
 
@@ -88,52 +74,65 @@ export default function ParticipantTimetablePage() {
     load()
   }, [load])
 
+  const byDate = useMemo(() => {
+    const groups: { date: string; rows: SessionRow[] }[] = []
+    for (const s of sessions) {
+      const last = groups[groups.length - 1]
+      if (last && last.date === s.date) last.rows.push(s)
+      else groups.push({ date: s.date, rows: [s] })
+    }
+    return groups
+  }, [sessions])
+
   return (
     <DashboardShell roleLabel="Participant" navItems={navItems}>
-      <h1 className="mb-6 text-2xl font-semibold text-gray-900">My Timetable</h1>
+      <h1 className="mb-2 text-2xl font-semibold text-gray-900">My Timetable</h1>
+      <p className="mb-6 text-sm text-gray-500">
+        Look for your own group&apos;s colour in each time slot.
+      </p>
 
       {noParticipant ? (
         <p className="text-sm text-red-600">
           We couldn&apos;t find a participant record linked to your login. Please let your admin know.
         </p>
+      ) : loading ? (
+        <p className="text-sm text-gray-500">Loading...</p>
+      ) : byDate.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-400">
+          No upcoming sessions yet.
+        </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-              <tr>
-                <th className="px-4 py-3">Date</th>
-                <th className="px-4 py-3">Time</th>
-                <th className="px-4 py-3">Session</th>
-                <th className="px-4 py-3">Facilitator</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {loading ? (
-                <tr>
-                  <td colSpan={4} className="px-4 py-6 text-center text-gray-400">
-                    Loading...
-                  </td>
-                </tr>
-              ) : sessions.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="px-4 py-6 text-center text-gray-400">
-                    No upcoming sessions yet.
-                  </td>
-                </tr>
-              ) : (
-                sessions.map((s) => (
-                  <tr key={s.id}>
-                    <td className="px-4 py-3">{s.date}</td>
-                    <td className="px-4 py-3">
-                      {s.start_time.slice(0, 5)}–{s.end_time.slice(0, 5)}
-                    </td>
-                    <td className="px-4 py-3 font-medium text-gray-900">{s.title}</td>
-                    <td className="px-4 py-3">{s.facilitator_name ?? '—'}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+        <div className="space-y-8">
+          {byDate.map((day) => (
+            <div key={day.date}>
+              <h2 className="mb-3 text-base font-semibold text-gray-900">
+                {dayNames[new Date(day.date + 'T00:00:00Z').getUTCDay()]}, {day.date}
+              </h2>
+              <div className="space-y-2">
+                {day.rows.map((s) => {
+                  const style = s.group_name ? GROUP_STYLE[s.group_name] ?? EVERYONE_STYLE : EVERYONE_STYLE
+                  return (
+                    <div
+                      key={s.id}
+                      className={`flex flex-wrap items-center gap-3 rounded-lg border p-3 shadow-sm ${style.badge}`}
+                    >
+                      <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${style.dot}`} />
+                      <span className="w-24 shrink-0 text-xs font-medium opacity-80">
+                        {s.start_time.slice(0, 5)}–{s.end_time.slice(0, 5)}
+                      </span>
+                      <div>
+                        <p className="font-medium">{s.title}</p>
+                        <p className="text-xs opacity-80">
+                          {s.group_name ?? 'Everyone'}
+                          {s.facilitator_name ? ` · ${s.facilitator_name}` : ''}
+                        </p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </DashboardShell>
