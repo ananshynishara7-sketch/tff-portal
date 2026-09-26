@@ -63,6 +63,27 @@ type FollowUpRow = {
   why: string
 }
 
+type CallLogEntry = {
+  call_outcome: string | null
+  what_they_said: string | null
+  called_by: string | null
+}
+
+// Same names/order as the Masterplan Phase 3 facilitator dropdown, plus
+// Lead Facilitator (matches who's allowed to make these calls).
+const CALL_LOG_CALLERS = [
+  'Lead Facilitator', 'Suba', 'Jeyastan', 'Nishara', 'Gajan', 'Jenny',
+  'Rageethan', 'Thuvarahan', 'Dakshika', 'Jericksha',
+]
+
+const CALL_OUTCOMES = [
+  'Reached - Resolved',
+  'Reached - Will Follow Up',
+  'No Answer',
+  'Switched Off / Unreachable',
+  'Other',
+]
+
 const todayISO = () => new Date().toISOString().slice(0, 10)
 
 export default function AdminDashboard() {
@@ -77,6 +98,7 @@ export default function AdminDashboard() {
   const [termFamilyRows, setTermFamilyRows] = useState<TermFamilyRow[]>([])
   const [leaveRows, setLeaveRows] = useState<LeaveRow[]>([])
   const [followUpRows, setFollowUpRows] = useState<FollowUpRow[]>([])
+  const [callLogs, setCallLogs] = useState<Record<string, CallLogEntry>>({})
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -88,6 +110,7 @@ export default function AdminDashboard() {
       { data: dayAttendance },
       { data: allAttendance },
       { data: leaveRequests },
+      { data: callLogData },
     ] = await Promise.all([
       supabase.from('participants').select('*', { count: 'exact', head: true }).eq('status', 'Active'),
       supabase.from('families').select('id, name, display_color').order('name'),
@@ -99,7 +122,18 @@ export default function AdminDashboard() {
         .select('id, participant_id, request_type, reason, status, participants(full_name, family_id, families(name)), decided_by:profiles(full_name)')
         .lte('leave_start_date', date)
         .gte('leave_end_date', date),
+      supabase.from('call_logs').select('participant_id, call_outcome, what_they_said, called_by').eq('call_date', date),
     ])
+
+    const callLogMap: Record<string, CallLogEntry> = {}
+    for (const c of callLogData ?? []) {
+      callLogMap[c.participant_id] = {
+        call_outcome: c.call_outcome,
+        what_they_said: c.what_they_said,
+        called_by: c.called_by,
+      }
+    }
+    setCallLogs(callLogMap)
 
     setTotalParticipants(participantCount ?? 0)
 
@@ -260,6 +294,24 @@ export default function AdminDashboard() {
   useEffect(() => {
     load()
   }, [load])
+
+  async function saveCallField(participantId: string, field: keyof CallLogEntry, value: string) {
+    setCallLogs((prev) => ({
+      ...prev,
+      [participantId]: {
+        call_outcome: prev[participantId]?.call_outcome ?? null,
+        what_they_said: prev[participantId]?.what_they_said ?? null,
+        called_by: prev[participantId]?.called_by ?? null,
+        [field]: value || null,
+      },
+    }))
+    await supabase
+      .from('call_logs')
+      .upsert(
+        { participant_id: participantId, call_date: date, [field]: value || null, updated_at: new Date().toISOString() },
+        { onConflict: 'participant_id,call_date' }
+      )
+  }
 
   return (
     <DashboardShell roleLabel="Participants Attendance Dashboard" navItems={navItems}>
@@ -433,29 +485,83 @@ export default function AdminDashboard() {
               <th className="px-4 py-3">Family</th>
               <th className="px-4 py-3">Mark</th>
               <th className="px-4 py-3">Why Follow Up</th>
+              <th className="px-4 py-3">Call Outcome</th>
+              <th className="px-4 py-3">What They Said</th>
+              <th className="px-4 py-3">Called By</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {followUpRows.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={7} className="px-4 py-6 text-center text-gray-400">
                   Nobody needs following up for this day.
                 </td>
               </tr>
             ) : (
-              followUpRows.map((r) => (
-                <tr key={r.id}>
-                  <td className="px-4 py-3 font-medium text-gray-900">{r.full_name}</td>
-                  <td className="px-4 py-3">{r.family_name}</td>
-                  <td className="px-4 py-3">{r.mark}</td>
-                  <td className="px-4 py-3">{r.why}</td>
-                </tr>
-              ))
+              followUpRows.map((r) => {
+                const log = callLogs[r.id]
+                return (
+                  <tr key={r.id}>
+                    <td className="px-4 py-3 font-medium text-gray-900">{r.full_name}</td>
+                    <td className="px-4 py-3">{r.family_name}</td>
+                    <td className="px-4 py-3">{r.mark}</td>
+                    <td className="px-4 py-3">{r.why}</td>
+                    <td className="px-4 py-2">
+                      <select
+                        value={log?.call_outcome ?? ''}
+                        onChange={(e) => saveCallField(r.id, 'call_outcome', e.target.value)}
+                        className="rounded border border-transparent bg-transparent px-1 py-1 text-sm hover:border-gray-200 focus:border-[#022269] focus:outline-none"
+                      >
+                        <option value="">—</option>
+                        {CALL_OUTCOMES.map((o) => (
+                          <option key={o} value={o}>
+                            {o}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-4 py-2">
+                      <input
+                        type="text"
+                        value={log?.what_they_said ?? ''}
+                        onChange={(e) =>
+                          setCallLogs((prev) => ({
+                            ...prev,
+                            [r.id]: {
+                              call_outcome: prev[r.id]?.call_outcome ?? null,
+                              called_by: prev[r.id]?.called_by ?? null,
+                              what_they_said: e.target.value,
+                            },
+                          }))
+                        }
+                        onBlur={(e) => saveCallField(r.id, 'what_they_said', e.target.value)}
+                        placeholder="Notes..."
+                        className="w-40 rounded border border-transparent bg-transparent px-1 py-1 text-sm hover:border-gray-200 focus:border-[#022269] focus:outline-none"
+                      />
+                    </td>
+                    <td className="px-4 py-2">
+                      <select
+                        value={log?.called_by ?? ''}
+                        onChange={(e) => saveCallField(r.id, 'called_by', e.target.value)}
+                        className="rounded border border-transparent bg-transparent px-1 py-1 text-sm hover:border-gray-200 focus:border-[#022269] focus:outline-none"
+                      >
+                        <option value="">—</option>
+                        {CALL_LOG_CALLERS.map((c) => (
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                  </tr>
+                )
+              })
             )}
           </tbody>
         </table>
         <p className="border-t border-gray-100 px-4 py-2 text-xs text-gray-400">
-          Absent or not-marked participants with no leave request on file for this day.
+          Absent or not-marked participants with no leave request on file for this day. Fill in
+          the Call Outcome, What They Said and Called By columns right here after you make the call - saves automatically.
         </p>
       </div>
     </DashboardShell>
