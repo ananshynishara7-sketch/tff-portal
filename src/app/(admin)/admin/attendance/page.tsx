@@ -11,7 +11,7 @@ const navItems = [
   { label: 'Attendance', href: '/admin/attendance' },
   { label: 'Timetable', href: '/admin/timetable' },
   { label: 'Announcements', href: '/admin/announcements' },
-  { label: 'Groups', href: '/admin/groups' },
+  { label: 'Families', href: '/admin/groups' },
   { label: 'Settings', href: '/admin/settings' },
 ]
 

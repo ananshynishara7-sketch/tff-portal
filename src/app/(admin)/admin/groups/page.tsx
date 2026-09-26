@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import Link from 'next/link'
 import DashboardShell from '@/components/DashboardShell'
 import { createClient } from '@/lib/supabase/client'
 
@@ -11,7 +12,7 @@ const navItems = [
   { label: 'Attendance', href: '/admin/attendance' },
   { label: 'Timetable', href: '/admin/timetable' },
   { label: 'Announcements', href: '/admin/announcements' },
-  { label: 'Groups', href: '/admin/groups' },
+  { label: 'Families', href: '/admin/groups' },
   { label: 'Settings', href: '/admin/settings' },
 ]
 
@@ -72,11 +73,11 @@ export default function GroupsPage() {
     const memberCount = counts[id] ?? 0
     if (memberCount > 0) {
       alert(
-        `"${name}" still has ${memberCount} active participant(s) in it. Move them to another group first (from the Participants page) before deleting this group.`
+        `"${name}" still has ${memberCount} active participant(s) in it. Move them to another family first (from the Participants page) before deleting this family.`
       )
       return
     }
-    if (!confirm(`Delete the group "${name}"? This can't be undone.`)) return
+    if (!confirm(`Delete the family "${name}"? This can't be undone.`)) return
     await supabase.from('families').delete().eq('id', id)
     loadData()
   }
@@ -84,12 +85,13 @@ export default function GroupsPage() {
   return (
     <DashboardShell roleLabel="Administration" navItems={navItems}>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-gray-900">Groups</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Families</h1>
       </div>
       <p className="mb-4 max-w-2xl text-sm text-gray-600">
-        These are your program&apos;s groups (currently Arising Brilliance, Believers, Benevolent,
+        These are your program&apos;s families (currently Arising Brilliance, Believers, Benevolent,
         Loving). Rename, recolor, or add a new one any time — this never needs code changes, so
-        it&apos;s safe to update next year too.
+        it&apos;s safe to update next year too. Click a family&apos;s name below to see its full
+        attendance record.
       </p>
 
       {loading ? (
@@ -126,6 +128,12 @@ export default function GroupsPage() {
                   </td>
                   <td className="px-4 py-2 text-gray-600">{counts[f.id] ?? 0}</td>
                   <td className="px-4 py-2 text-right">
+                    <Link
+                      href={`/admin/families/${f.id}`}
+                      className="mr-4 text-xs text-[#022269] hover:underline"
+                    >
+                      View attendance →
+                    </Link>
                     <button
                       onClick={() => deleteFamily(f.id, f.name)}
                       className="text-xs text-red-500 hover:text-red-700 hover:underline"
@@ -145,7 +153,7 @@ export default function GroupsPage() {
         className="mt-6 flex flex-wrap items-end gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
       >
         <div>
-          <label className="mb-1 block text-xs font-medium text-gray-600">New group name</label>
+          <label className="mb-1 block text-xs font-medium text-gray-600">New family name</label>
           <input
             type="text"
             required
@@ -169,7 +177,7 @@ export default function GroupsPage() {
           disabled={saving}
           className="rounded-md bg-[#022269] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
         >
-          + Add Group
+          + Add Family
         </button>
       </form>
     </DashboardShell>

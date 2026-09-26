@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import Link from 'next/link'
 import DashboardShell from '@/components/DashboardShell'
 import { createClient } from '@/lib/supabase/client'
 
@@ -11,7 +12,7 @@ const navItems = [
   { label: 'Attendance', href: '/admin/attendance' },
   { label: 'Timetable', href: '/admin/timetable' },
   { label: 'Announcements', href: '/admin/announcements' },
-  { label: 'Groups', href: '/admin/groups' },
+  { label: 'Families', href: '/admin/groups' },
   { label: 'Settings', href: '/admin/settings' },
 ]
 
@@ -243,6 +244,19 @@ export default function AdminDashboard() {
         </div>
       </div>
 
+      <div className="mb-6 flex flex-wrap gap-2">
+        {dayFamilyRows.map((f) => (
+          <Link
+            key={f.id}
+            href={`/admin/families/${f.id}`}
+            className="rounded-full border px-3 py-1 text-xs font-medium hover:opacity-80"
+            style={{ borderColor: f.display_color, color: f.display_color }}
+          >
+            {f.name}
+          </Link>
+        ))}
+      </div>
+
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Total Participants" value={loading ? '—' : String(totalParticipants)} />
         <StatCard label="Total Facilitators" value={loading ? '—' : String(totalFacilitators)} />
@@ -259,12 +273,12 @@ export default function AdminDashboard() {
         <MiniStat label="Half Day (Not App.)" value={dayCounts.hn} color="text-orange-700" />
       </div>
 
-      <h2 className="mb-3 text-lg font-semibold text-gray-900">By Group — Selected Day</h2>
+      <h2 className="mb-3 text-lg font-semibold text-gray-900">By Family — Selected Day</h2>
       <div className="mb-8 overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
         <table className="w-full text-left text-sm">
           <thead className="bg-gray-50 text-xs uppercase text-gray-500">
             <tr>
-              <th className="px-4 py-3">Group</th>
+              <th className="px-4 py-3">Family</th>
               <th className="px-4 py-3">Participants</th>
               <th className="px-4 py-3">Present</th>
               <th className="px-4 py-3">Late</th>
@@ -277,7 +291,7 @@ export default function AdminDashboard() {
           <tbody className="divide-y divide-gray-100">
             {dayFamilyRows.map((row) => (
               <tr key={row.id}>
-                <td className="px-4 py-3 font-medium" style={{ color: row.display_color }}>{row.name}</td>
+                <td className="px-4 py-3 font-medium"><Link href={`/admin/families/${row.id}`} style={{ color: row.display_color }} className="hover:underline">{row.name}</Link></td>
                 <td className="px-4 py-3">{row.total}</td>
                 <td className="px-4 py-3">{row.present}</td>
                 <td className="px-4 py-3">{row.late}</td>
@@ -296,7 +310,7 @@ export default function AdminDashboard() {
         <table className="w-full text-left text-sm">
           <thead className="bg-gray-50 text-xs uppercase text-gray-500">
             <tr>
-              <th className="px-4 py-3">Group</th>
+              <th className="px-4 py-3">Family</th>
               <th className="px-4 py-3">Participants</th>
               <th className="px-4 py-3">Present</th>
               <th className="px-4 py-3">Late</th>
@@ -311,7 +325,7 @@ export default function AdminDashboard() {
           <tbody className="divide-y divide-gray-100">
             {termFamilyRows.map((row) => (
               <tr key={row.id}>
-                <td className="px-4 py-3 font-medium" style={{ color: row.display_color }}>{row.name}</td>
+                <td className="px-4 py-3 font-medium"><Link href={`/admin/families/${row.id}`} style={{ color: row.display_color }} className="hover:underline">{row.name}</Link></td>
                 <td className="px-4 py-3">{row.participants}</td>
                 <td className="px-4 py-3">{row.present}</td>
                 <td className="px-4 py-3">{row.late}</td>
@@ -337,7 +351,7 @@ export default function AdminDashboard() {
           <thead className="bg-gray-50 text-xs uppercase text-gray-500">
             <tr>
               <th className="px-4 py-3">Name</th>
-              <th className="px-4 py-3">Group</th>
+              <th className="px-4 py-3">Family</th>
               <th className="px-4 py-3">Type</th>
               <th className="px-4 py-3">Reason</th>
               <th className="px-4 py-3">Status</th>

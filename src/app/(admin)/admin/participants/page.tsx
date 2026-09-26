@@ -11,7 +11,7 @@ const navItems = [
   { label: 'Attendance', href: '/admin/attendance' },
   { label: 'Timetable', href: '/admin/timetable' },
   { label: 'Announcements', href: '/admin/announcements' },
-  { label: 'Groups', href: '/admin/groups' },
+  { label: 'Families', href: '/admin/groups' },
   { label: 'Settings', href: '/admin/settings' },
 ]
 
@@ -158,7 +158,7 @@ export default function ParticipantsPage() {
           onChange={(e) => setFamilyFilter(e.target.value)}
           className="rounded-md border border-gray-300 px-3 py-2 text-sm"
         >
-          <option value="all">All groups</option>
+          <option value="all">All families</option>
           {families.map((f) => (
             <option key={f.id} value={f.id}>
               {f.name}
@@ -183,13 +183,13 @@ export default function ParticipantsPage() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">Group</label>
+            <label className="mb-1 block text-xs font-medium text-gray-600">Family</label>
             <select
               value={newFamily}
               onChange={(e) => setNewFamily(e.target.value)}
               className="rounded-md border border-gray-300 px-3 py-2 text-sm"
             >
-              <option value="">No group</option>
+              <option value="">No family</option>
               {families.map((f) => (
                 <option key={f.id} value={f.id}>
                   {f.name}
@@ -215,7 +215,7 @@ export default function ParticipantsPage() {
             <thead className="bg-gray-50 text-xs uppercase text-gray-500">
               <tr>
                 <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Group</th>
+                <th className="px-4 py-3">Family</th>
                 <th className="px-4 py-3">Joining Date</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Attendance %</th>
