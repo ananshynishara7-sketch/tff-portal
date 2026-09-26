@@ -37,6 +37,7 @@ export default function AdminAttendancePage() {
   const [savingId, setSavingId] = useState<string | null>(null)
   const [newName, setNewName] = useState('')
   const [addingParticipant, setAddingParticipant] = useState(false)
+  const [clearing, setClearing] = useState(false)
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -86,6 +87,25 @@ export default function AdminAttendancePage() {
     setSavingId(null)
   }
 
+  async function clearAllForDay() {
+    const markedCount = Object.keys(attendance).length
+    if (markedCount === 0) {
+      alert('Nothing is marked for this day yet.')
+      return
+    }
+    if (
+      !confirm(
+        `This will erase all ${markedCount} attendance marks for ${date}, for every participant. This can't be undone. Continue?`
+      )
+    ) {
+      return
+    }
+    setClearing(true)
+    await supabase.from('attendance_records').delete().eq('date', date)
+    setAttendance({})
+    setClearing(false)
+  }
+
   async function addParticipant(e: React.FormEvent) {
     e.preventDefault()
     if (!newName.trim()) return
@@ -101,14 +121,21 @@ export default function AdminAttendancePage() {
     <DashboardShell roleLabel="Administration" navItems={navItems}>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold text-gray-900">Attendance</h1>
-        <div>
-          <label className="mr-2 text-sm text-gray-600">Date:</label>
+        <div className="flex items-center gap-3">
+          <label className="text-sm text-gray-600">Date:</label>
           <input
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
             className="rounded-md border border-gray-300 px-3 py-1.5 text-sm"
           />
+          <button
+            onClick={clearAllForDay}
+            disabled={clearing || loading}
+            className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+          >
+            {clearing ? 'Clearing...' : 'Clear All for This Day'}
+          </button>
         </div>
       </div>
 
