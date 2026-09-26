@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { Fragment, useEffect, useState, useCallback } from 'react'
 import DashboardShell from '@/components/DashboardShell'
 import { createClient } from '@/lib/supabase/client'
 
@@ -19,11 +19,22 @@ type Family = { id: string; name: string; display_color: string }
 type Participant = {
   id: string
   full_name: string
+  surname: string | null
   family_id: string | null
   joining_date: string | null
   status: string
   contact_email: string | null
   contact_phone: string | null
+  tff_id: string | null
+  gender: string | null
+  tff_email: string | null
+  address: string | null
+  religion: string | null
+  date_of_birth: string | null
+  nic: string | null
+  school: string | null
+  medium: string | null
+  qualification: string | null
 }
 
 export default function ParticipantsPage() {
@@ -33,6 +44,8 @@ export default function ParticipantsPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [familyFilter, setFamilyFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('Active')
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   // New-row form state
   const [showAddForm, setShowAddForm] = useState(false)
@@ -149,14 +162,18 @@ export default function ParticipantsPage() {
   const filtered = participants.filter((p) => {
     const matchesSearch = p.full_name.toLowerCase().includes(search.toLowerCase())
     const matchesFamily = familyFilter === 'all' || p.family_id === familyFilter
-    return matchesSearch && matchesFamily
+    const matchesStatus = statusFilter === 'all' || p.status === statusFilter
+    return matchesSearch && matchesFamily && matchesStatus
   })
 
   return (
     <DashboardShell roleLabel="Administration" navItems={navItems}>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold text-gray-900">
-          Participants <span className="text-base font-normal text-gray-400">({participants.length})</span>
+          Participants{' '}
+          <span className="text-base font-normal text-gray-400">
+            ({filtered.length} of {participants.length} ever enrolled)
+          </span>
         </h1>
         <button
           onClick={() => setShowAddForm((v) => !v)}
@@ -185,6 +202,17 @@ export default function ParticipantsPage() {
               {f.name}
             </option>
           ))}
+        </select>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+        >
+          <option value="Active">Active only</option>
+          <option value="On Leave">On Leave only</option>
+          <option value="Left">Left only</option>
+          <option value="Deceased">Deceased only</option>
+          <option value="all">All statuses (everyone ever enrolled)</option>
         </select>
       </div>
 
@@ -236,6 +264,7 @@ export default function ParticipantsPage() {
             <thead className="bg-gray-50 text-xs uppercase text-gray-500">
               <tr>
                 <th className="px-4 py-3">Name</th>
+                <th className="px-4 py-3">Surname</th>
                 <th className="px-4 py-3">Family</th>
                 <th className="px-4 py-3">Joining Date</th>
                 <th className="px-4 py-3">Status</th>
@@ -243,75 +272,133 @@ export default function ParticipantsPage() {
                 <th className="px-4 py-3">Phase 3 Punctuality %</th>
                 <th className="px-4 py-3">Overall (P1-P3) Attendance %</th>
                 <th className="px-4 py-3">Overall (P1-P3) Punctuality %</th>
+                <th className="px-4 py-3"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filtered.map((p) => (
-                <tr key={p.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-2">
-                    <input
-                      defaultValue={p.full_name}
-                      onBlur={(e) => updateField(p.id, 'full_name', e.target.value)}
-                      className="w-full rounded border border-transparent bg-transparent px-2 py-1 font-medium text-gray-900 hover:border-gray-200 focus:border-[#022269] focus:outline-none"
-                    />
-                  </td>
-                  <td className="px-4 py-2">
-                    <select
-                      value={p.family_id ?? ''}
-                      onChange={(e) => updateField(p.id, 'family_id', e.target.value)}
-                      className="rounded border border-transparent bg-transparent px-2 py-1 text-sm hover:border-gray-200 focus:border-[#022269] focus:outline-none"
-                      style={{ color: familyColor(p.family_id) }}
-                    >
-                      <option value="">—</option>
-                      {families.map((f) => (
-                        <option key={f.id} value={f.id}>
-                          {f.name}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-4 py-2 text-gray-600">
-                    <input
-                      type="date"
-                      defaultValue={p.joining_date ?? ''}
-                      onBlur={(e) => updateField(p.id, 'joining_date', e.target.value)}
-                      className="rounded border border-transparent bg-transparent px-2 py-1 text-sm hover:border-gray-200 focus:border-[#022269] focus:outline-none"
-                    />
-                  </td>
-                  <td className="px-4 py-2">
-                    <select
-                      value={p.status}
-                      onChange={(e) => updateField(p.id, 'status', e.target.value)}
-                      className={`rounded-full border px-2 py-1 text-xs font-medium ${
-                        p.status === 'Active'
-                          ? 'border-green-200 bg-green-50 text-green-700'
-                          : p.status === 'On Leave'
-                          ? 'border-yellow-200 bg-yellow-50 text-yellow-700'
-                          : 'border-gray-200 bg-gray-50 text-gray-500'
-                      }`}
-                    >
-                      <option value="Active">Active</option>
-                      <option value="On Leave">On Leave</option>
-                      <option value="Left">Left</option>
-                    </select>
-                  </td>
-                  <td className="px-4 py-2 font-medium text-gray-900">
-                    {stats[p.id]?.attendancePct ?? 0}%
-                  </td>
-                  <td className="px-4 py-2 font-medium text-gray-900">
-                    {stats[p.id]?.punctualityPct ?? 0}%
-                  </td>
-                  <td className="px-4 py-2 font-medium text-gray-900">
-                    {stats[p.id]?.overallAttendancePct ?? 0}%
-                  </td>
-                  <td className="px-4 py-2 font-medium text-gray-900">
-                    {stats[p.id]?.overallPunctualityPct ?? 0}%
-                  </td>
-                </tr>
+                <Fragment key={p.id}>
+                  <tr className="hover:bg-gray-50">
+                    <td className="px-4 py-2">
+                      <input
+                        defaultValue={p.full_name}
+                        onBlur={(e) => updateField(p.id, 'full_name', e.target.value)}
+                        className="w-full rounded border border-transparent bg-transparent px-2 py-1 font-medium text-gray-900 hover:border-gray-200 focus:border-[#022269] focus:outline-none"
+                      />
+                    </td>
+                    <td className="px-4 py-2 text-gray-600">
+                      <input
+                        defaultValue={p.surname ?? ''}
+                        onBlur={(e) => updateField(p.id, 'surname', e.target.value)}
+                        className="w-full rounded border border-transparent bg-transparent px-2 py-1 text-sm hover:border-gray-200 focus:border-[#022269] focus:outline-none"
+                      />
+                    </td>
+                    <td className="px-4 py-2">
+                      <select
+                        value={p.family_id ?? ''}
+                        onChange={(e) => updateField(p.id, 'family_id', e.target.value)}
+                        className="rounded border border-transparent bg-transparent px-2 py-1 text-sm hover:border-gray-200 focus:border-[#022269] focus:outline-none"
+                        style={{ color: familyColor(p.family_id) }}
+                      >
+                        <option value="">—</option>
+                        {families.map((f) => (
+                          <option key={f.id} value={f.id}>
+                            {f.name}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-4 py-2 text-gray-600">
+                      <input
+                        type="date"
+                        defaultValue={p.joining_date ?? ''}
+                        onBlur={(e) => updateField(p.id, 'joining_date', e.target.value)}
+                        className="rounded border border-transparent bg-transparent px-2 py-1 text-sm hover:border-gray-200 focus:border-[#022269] focus:outline-none"
+                      />
+                    </td>
+                    <td className="px-4 py-2">
+                      <select
+                        value={p.status}
+                        onChange={(e) => updateField(p.id, 'status', e.target.value)}
+                        className={`rounded-full border px-2 py-1 text-xs font-medium ${
+                          p.status === 'Active'
+                            ? 'border-green-200 bg-green-50 text-green-700'
+                            : p.status === 'On Leave'
+                            ? 'border-yellow-200 bg-yellow-50 text-yellow-700'
+                            : p.status === 'Deceased'
+                            ? 'border-gray-400 bg-gray-100 text-gray-700'
+                            : 'border-gray-200 bg-gray-50 text-gray-500'
+                        }`}
+                      >
+                        <option value="Active">Active</option>
+                        <option value="On Leave">On Leave</option>
+                        <option value="Left">Left</option>
+                        <option value="Deceased">Deceased</option>
+                      </select>
+                    </td>
+                    <td className="px-4 py-2 font-medium text-gray-900">
+                      {stats[p.id]?.attendancePct ?? 0}%
+                    </td>
+                    <td className="px-4 py-2 font-medium text-gray-900">
+                      {stats[p.id]?.punctualityPct ?? 0}%
+                    </td>
+                    <td className="px-4 py-2 font-medium text-gray-900">
+                      {stats[p.id]?.overallAttendancePct ?? 0}%
+                    </td>
+                    <td className="px-4 py-2 font-medium text-gray-900">
+                      {stats[p.id]?.overallPunctualityPct ?? 0}%
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      <button
+                        onClick={() => setExpandedId(expandedId === p.id ? null : p.id)}
+                        className="text-xs text-[#022269] hover:underline"
+                      >
+                        {expandedId === p.id ? 'Hide details' : 'Details'}
+                      </button>
+                    </td>
+                  </tr>
+                  {expandedId === p.id && (
+                    <tr className="bg-gray-50">
+                      <td colSpan={10} className="px-4 py-4">
+                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                          <DetailField label="TFF ID" value={p.tff_id} onSave={(v) => updateField(p.id, 'tff_id', v)} />
+                          <DetailField label="Gender" value={p.gender} onSave={(v) => updateField(p.id, 'gender', v)} />
+                          <DetailField
+                            label="Date of Birth"
+                            value={p.date_of_birth}
+                            type="date"
+                            onSave={(v) => updateField(p.id, 'date_of_birth', v)}
+                          />
+                          <DetailField label="Religion" value={p.religion} onSave={(v) => updateField(p.id, 'religion', v)} />
+                          <DetailField label="NIC" value={p.nic} onSave={(v) => updateField(p.id, 'nic', v)} />
+                          <DetailField
+                            label="Mobile Number"
+                            value={p.contact_phone}
+                            onSave={(v) => updateField(p.id, 'contact_phone', v)}
+                          />
+                          <DetailField label="TFF Email" value={p.tff_email} onSave={(v) => updateField(p.id, 'tff_email', v)} />
+                          <DetailField
+                            label="Personal Email"
+                            value={p.contact_email}
+                            onSave={(v) => updateField(p.id, 'contact_email', v)}
+                          />
+                          <DetailField label="School" value={p.school} onSave={(v) => updateField(p.id, 'school', v)} />
+                          <DetailField label="Medium" value={p.medium} onSave={(v) => updateField(p.id, 'medium', v)} />
+                          <DetailField
+                            label="Qualification"
+                            value={p.qualification}
+                            onSave={(v) => updateField(p.id, 'qualification', v)}
+                          />
+                          <DetailField label="Address" value={p.address} onSave={(v) => updateField(p.id, 'address', v)} />
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-gray-400">
+                  <td colSpan={10} className="px-4 py-8 text-center text-gray-400">
                     No participants match.
                   </td>
                 </tr>
@@ -321,11 +408,36 @@ export default function ParticipantsPage() {
         </div>
       )}
       <p className="mt-3 text-xs text-gray-400">
-        Click any cell to edit it directly — changes save automatically. &quot;Phase 3&quot; columns
-        only count this current phase (from 7 Sept 2026). &quot;Overall (P1-P3)&quot; columns add
-        Phase 1 and Phase 2&apos;s final numbers on top, so they show each participant&apos;s whole
-        time in the programme.
+        Click any cell to edit it directly — changes save automatically. Click &quot;Details&quot; on
+        a row to see and edit that participant&apos;s full information (date of birth, NIC, school,
+        contact details, etc). &quot;Phase 3&quot; columns only count this current phase (from 7 Sept
+        2026). &quot;Overall (P1-P3)&quot; columns add Phase 1 and Phase 2&apos;s final numbers on
+        top, so they show each participant&apos;s whole time in the programme.
       </p>
     </DashboardShell>
+  )
+}
+
+function DetailField({
+  label,
+  value,
+  onSave,
+  type = 'text',
+}: {
+  label: string
+  value: string | null
+  onSave: (value: string) => void
+  type?: string
+}) {
+  return (
+    <div>
+      <label className="mb-1 block text-xs font-medium text-gray-500">{label}</label>
+      <input
+        type={type}
+        defaultValue={value ?? ''}
+        onBlur={(e) => onSave(e.target.value)}
+        className="w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-sm focus:border-[#022269] focus:outline-none"
+      />
+    </div>
   )
 }
