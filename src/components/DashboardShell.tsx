@@ -14,7 +14,7 @@ function LiveDateTime() {
 
   useEffect(() => {
     setNow(new Date())
-    const t = setInterval(() => setNow(new Date()), 1000)
+    const t = setInterval(() => setNow(new Date()), 30000)
     return () => clearInterval(t)
   }, [])
 
@@ -31,7 +31,6 @@ function LiveDateTime() {
   const timeLabel = now.toLocaleTimeString('en-GB', {
     hour: '2-digit',
     minute: '2-digit',
-    second: '2-digit',
   })
 
   return (
