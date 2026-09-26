@@ -44,6 +44,7 @@ type SessionRow = {
   end_time: string
   group_name: string | null
   facilitator_name: string | null
+  co_facilitator_name: string | null
 }
 
 const todayISO = () => new Date().toISOString().slice(0, 10)
@@ -79,6 +80,7 @@ export default function AdminTimetablePage() {
     end_time: '10:00',
     group_name: '',
     facilitator_name: '',
+    co_facilitator_name: '',
   }
   const [form, setForm] = useState(emptyForm)
 
@@ -86,7 +88,7 @@ export default function AdminTimetablePage() {
     setLoading(true)
     const { data } = await supabase
       .from('sessions')
-      .select('id, title, date, start_time, end_time, group_name, facilitator_name')
+      .select('id, title, date, start_time, end_time, group_name, facilitator_name, co_facilitator_name')
       .order('date')
       .order('start_time')
     setAllSessions(data ?? [])
@@ -112,6 +114,7 @@ export default function AdminTimetablePage() {
       end_time: row.end_time.slice(0, 5),
       group_name: row.group_name ?? '',
       facilitator_name: row.facilitator_name ?? '',
+      co_facilitator_name: row.co_facilitator_name ?? '',
     })
     setError(null)
   }
@@ -141,6 +144,7 @@ export default function AdminTimetablePage() {
       end_time: form.end_time,
       group_name: form.group_name || null,
       facilitator_name: form.facilitator_name || null,
+      co_facilitator_name: form.co_facilitator_name || null,
     }
 
     if (editingId === 'new') {
@@ -342,6 +346,21 @@ export default function AdminTimetablePage() {
                   ))}
                 </select>
               </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Co-facilitator</label>
+                <select
+                  value={form.co_facilitator_name}
+                  onChange={(e) => setForm((f) => ({ ...f, co_facilitator_name: e.target.value }))}
+                  className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#022269] focus:outline-none sm:w-56"
+                >
+                  <option value="">Not assigned yet</option>
+                  {FACILITATORS.map((f) => (
+                    <option key={f} value={f}>
+                      {f}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {error && <p className="text-sm text-red-600">{error}</p>}
@@ -400,6 +419,7 @@ export default function AdminTimetablePage() {
                           <p className="text-xs opacity-80">
                             {s.group_name ?? 'Everyone'}
                             {s.facilitator_name ? ` · ${s.facilitator_name}` : ''}
+                            {s.co_facilitator_name ? ` + ${s.co_facilitator_name}` : ''}
                           </p>
                         </div>
                       </div>

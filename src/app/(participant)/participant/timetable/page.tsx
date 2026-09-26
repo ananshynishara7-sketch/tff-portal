@@ -28,6 +28,7 @@ type SessionRow = {
   end_time: string
   group_name: string | null
   facilitator_name: string | null
+  co_facilitator_name: string | null
 }
 
 const todayISO = () => new Date().toISOString().slice(0, 10)
@@ -61,7 +62,7 @@ export default function ParticipantTimetablePage() {
 
     const { data } = await supabase
       .from('sessions')
-      .select('id, title, date, start_time, end_time, group_name, facilitator_name')
+      .select('id, title, date, start_time, end_time, group_name, facilitator_name, co_facilitator_name')
       .gte('date', todayISO())
       .order('date')
       .order('start_time')
@@ -125,6 +126,7 @@ export default function ParticipantTimetablePage() {
                         <p className="text-xs opacity-80">
                           {s.group_name ?? 'Everyone'}
                           {s.facilitator_name ? ` · ${s.facilitator_name}` : ''}
+                          {s.co_facilitator_name ? ` + ${s.co_facilitator_name}` : ''}
                         </p>
                       </div>
                     </div>
