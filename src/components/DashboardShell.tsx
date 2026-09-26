@@ -2,9 +2,46 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 type NavItem = { label: string; href: string }
+
+// Live date/time with the weekday name, shown at the top of every page
+// (admin, facilitator, participant - wherever DashboardShell is used).
+function LiveDateTime() {
+  const [now, setNow] = useState<Date | null>(null)
+
+  useEffect(() => {
+    setNow(new Date())
+    const t = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(t)
+  }, [])
+
+  // Avoid a server/client mismatch on first render - render nothing until
+  // the client has a real clock value.
+  if (!now) return <div className="mb-4 h-5" />
+
+  const dateLabel = now.toLocaleDateString('en-GB', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+  const timeLabel = now.toLocaleTimeString('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-2 text-sm font-medium text-gray-500">
+      <span>{dateLabel}</span>
+      <span className="text-gray-300">·</span>
+      <span className="font-mono">{timeLabel}</span>
+    </div>
+  )
+}
 
 export default function DashboardShell({
   roleLabel,
@@ -50,7 +87,10 @@ export default function DashboardShell({
         </button>
       </aside>
 
-      <main className="flex-1 bg-gray-50 p-4 md:p-8">{children}</main>
+      <main className="flex-1 bg-gray-50 p-4 md:p-8">
+        <LiveDateTime />
+        {children}
+      </main>
     </div>
   )
 }
