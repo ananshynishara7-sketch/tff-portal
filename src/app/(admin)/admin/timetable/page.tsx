@@ -40,6 +40,21 @@ type SessionRow = {
 const todayISO = () => new Date().toISOString().slice(0, 10)
 const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
+const pad2 = (n: number) => String(n).padStart(2, '0')
+
+// Local (browser) date/time, not UTC - so "now" lines up with what's on
+// the timetable, which is entered in local time.
+function localNowParts(d: Date) {
+  return {
+    date: `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`,
+    time: `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`,
+  }
+}
+
+function isHappeningNow(s: { date: string; start_time: string; end_time: string }, nowDate: string, nowTime: string) {
+  return s.date === nowDate && s.start_time <= nowTime && nowTime < s.end_time
+}
+
 function addDays(iso: string, n: number) {
   const d = new Date(iso + 'T00:00:00Z')
   d.setUTCDate(d.getUTCDate() + n)
@@ -76,6 +91,14 @@ export default function AdminTimetablePage() {
   const [showColours, setShowColours] = useState(false)
   const [newGroupName, setNewGroupName] = useState('')
   const [newGroupColor, setNewGroupColor] = useState('#f59e0b')
+  const [now, setNow] = useState(() => new Date())
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30000)
+    return () => clearInterval(t)
+  }, [])
+
+  const { date: nowDate, time: nowTime } = localNowParts(now)
 
   const emptyForm = {
     title: '',
@@ -565,16 +588,29 @@ export default function AdminTimetablePage() {
                   }
 
                   const hex = s.color || (s.group_name ? colorByName[s.group_name] ?? everyoneColor : everyoneColor)
+                  const happeningNow = isHappeningNow(s, nowDate, nowTime)
                   return (
                     <div
                       key={s.id}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 shadow-sm"
-                      style={colorStyle(hex)}
+                      className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 shadow-sm ${
+                        happeningNow ? 'ring-2 ring-offset-1' : ''
+                      }`}
+                      style={happeningNow ? { ...colorStyle(hex), ...({ '--tw-ring-color': hex } as Record<string, string>) } : colorStyle(hex)}
                     >
                       <div className="flex items-center gap-2">
                         <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: hex }} />
                         <div>
-                          <p className="font-medium">{s.title}</p>
+                          <p className="flex items-center gap-2 font-medium">
+                            {s.title}
+                            {happeningNow && (
+                              <span
+                                className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white"
+                                style={{ backgroundColor: hex }}
+                              >
+                                Happening now
+                              </span>
+                            )}
+                          </p>
                           {(() => {
                             const parts = [
                               s.group_name,
