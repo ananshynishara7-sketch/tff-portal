@@ -13,12 +13,7 @@ const navItems = [
   { label: 'My Profile', href: '/participant/profile' },
 ]
 
-const GROUP_STYLE: Record<string, { badge: string; dot: string }> = {
-  Spartans: { badge: 'bg-red-100 text-red-800 border-red-300', dot: 'bg-red-500' },
-  Thebans: { badge: 'bg-blue-100 text-blue-800 border-blue-300', dot: 'bg-blue-500' },
-  Athenians: { badge: 'bg-emerald-100 text-emerald-800 border-emerald-300', dot: 'bg-emerald-500' },
-}
-const EVERYONE_STYLE = { badge: 'bg-gray-100 text-gray-700 border-gray-300', dot: 'bg-gray-400' }
+type TimetableGroup = { id: string; name: string; color: string; sort_order: number }
 
 type SessionRow = {
   id: string
@@ -34,9 +29,18 @@ type SessionRow = {
 const todayISO = () => new Date().toISOString().slice(0, 10)
 const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
+function colorStyle(hex: string) {
+  return {
+    backgroundColor: `${hex}1A`,
+    borderColor: hex,
+    color: hex,
+  }
+}
+
 export default function ParticipantTimetablePage() {
   const supabase = createClient()
   const [sessions, setSessions] = useState<SessionRow[]>([])
+  const [groups, setGroups] = useState<TimetableGroup[]>([])
   const [loading, setLoading] = useState(true)
   const [noParticipant, setNoParticipant] = useState(false)
 
@@ -60,14 +64,18 @@ export default function ParticipantTimetablePage() {
       return
     }
 
-    const { data } = await supabase
-      .from('sessions')
-      .select('id, title, date, start_time, end_time, group_name, facilitator_name, co_facilitator_name')
-      .gte('date', todayISO())
-      .order('date')
-      .order('start_time')
+    const [{ data }, { data: groupData }] = await Promise.all([
+      supabase
+        .from('sessions')
+        .select('id, title, date, start_time, end_time, group_name, facilitator_name, co_facilitator_name')
+        .gte('date', todayISO())
+        .order('date')
+        .order('start_time'),
+      supabase.from('timetable_groups').select('id, name, color, sort_order').order('sort_order'),
+    ])
 
     setSessions(data ?? [])
+    setGroups(groupData ?? [])
     setLoading(false)
   }, [supabase])
 
@@ -75,14 +83,17 @@ export default function ParticipantTimetablePage() {
     load()
   }, [load])
 
+  const colorByName: Record<string, string> = Object.fromEntries(groups.map((g) => [g.name, g.color]))
+  const everyoneColor = groups.find((g) => g.name === 'Everyone')?.color ?? '#6b7280'
+
   const byDate = useMemo(() => {
-    const groups: { date: string; rows: SessionRow[] }[] = []
+    const result: { date: string; rows: SessionRow[] }[] = []
     for (const s of sessions) {
-      const last = groups[groups.length - 1]
+      const last = result[result.length - 1]
       if (last && last.date === s.date) last.rows.push(s)
-      else groups.push({ date: s.date, rows: [s] })
+      else result.push({ date: s.date, rows: [s] })
     }
-    return groups
+    return result
   }, [sessions])
 
   return (
@@ -91,6 +102,18 @@ export default function ParticipantTimetablePage() {
       <p className="mb-6 text-sm text-gray-500">
         Look for your own group&apos;s colour in each time slot.
       </p>
+
+      {!noParticipant && groups.length > 0 && (
+        <div className="mb-6 flex flex-wrap items-center gap-3 text-xs text-gray-500">
+          <span>Groups:</span>
+          {groups.map((g) => (
+            <span key={g.id} className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: g.color }} />
+              {g.name}
+            </span>
+          ))}
+        </div>
+      )}
 
       {noParticipant ? (
         <p className="text-sm text-red-600">
@@ -111,13 +134,14 @@ export default function ParticipantTimetablePage() {
               </h2>
               <div className="space-y-2">
                 {day.rows.map((s) => {
-                  const style = s.group_name ? GROUP_STYLE[s.group_name] ?? EVERYONE_STYLE : EVERYONE_STYLE
+                  const hex = s.group_name ? colorByName[s.group_name] ?? everyoneColor : everyoneColor
                   return (
                     <div
                       key={s.id}
-                      className={`flex flex-wrap items-center gap-3 rounded-lg border p-3 shadow-sm ${style.badge}`}
+                      className="flex flex-wrap items-center gap-3 rounded-lg border p-3 shadow-sm"
+                      style={colorStyle(hex)}
                     >
-                      <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${style.dot}`} />
+                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: hex }} />
                       <span className="w-24 shrink-0 text-xs font-medium opacity-80">
                         {s.start_time.slice(0, 5)}–{s.end_time.slice(0, 5)}
                       </span>

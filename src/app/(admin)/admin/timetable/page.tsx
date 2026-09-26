@@ -23,18 +23,7 @@ const FACILITATORS = [
   'Rageethan', 'Thuvarahan', 'Dakshika', 'Jericksha',
 ]
 
-// The rotating groups used in the Phase 3 schedule - a separate concept
-// from the attendance Families. Each gets its own colour so a day's
-// parallel activities are easy to tell apart at a glance.
-const GROUPS: { name: string; badge: string; dot: string }[] = [
-  { name: 'Spartans', badge: 'bg-red-100 text-red-800 border-red-300', dot: 'bg-red-500' },
-  { name: 'Thebans', badge: 'bg-blue-100 text-blue-800 border-blue-300', dot: 'bg-blue-500' },
-  { name: 'Athenians', badge: 'bg-emerald-100 text-emerald-800 border-emerald-300', dot: 'bg-emerald-500' },
-]
-const GROUP_STYLE: Record<string, { badge: string; dot: string }> = Object.fromEntries(
-  GROUPS.map((g) => [g.name, g])
-)
-const EVERYONE_STYLE = { badge: 'bg-gray-100 text-gray-700 border-gray-300', dot: 'bg-gray-400' }
+type TimetableGroup = { id: string; name: string; color: string; sort_order: number }
 
 type SessionRow = {
   id: string
@@ -64,14 +53,28 @@ function startOfWeek(iso: string) {
   return d.toISOString().slice(0, 10)
 }
 
+// Turns a picked hex colour into a light-background / coloured-border /
+// coloured-text card style, so one colour choice is enough per group.
+function colorStyle(hex: string) {
+  return {
+    backgroundColor: `${hex}1A`,
+    borderColor: hex,
+    color: hex,
+  }
+}
+
 export default function AdminTimetablePage() {
   const supabase = createClient()
   const [date, setDate] = useState(todayISO())
   const [allSessions, setAllSessions] = useState<SessionRow[]>([])
+  const [groups, setGroups] = useState<TimetableGroup[]>([])
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showColours, setShowColours] = useState(false)
+  const [newGroupName, setNewGroupName] = useState('')
+  const [newGroupColor, setNewGroupColor] = useState('#f59e0b')
 
   const emptyForm = {
     title: '',
@@ -86,18 +89,27 @@ export default function AdminTimetablePage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase
-      .from('sessions')
-      .select('id, title, date, start_time, end_time, group_name, facilitator_name, co_facilitator_name')
-      .order('date')
-      .order('start_time')
-    setAllSessions(data ?? [])
+    const [{ data: sessionData }, { data: groupData }] = await Promise.all([
+      supabase
+        .from('sessions')
+        .select('id, title, date, start_time, end_time, group_name, facilitator_name, co_facilitator_name')
+        .order('date')
+        .order('start_time'),
+      supabase.from('timetable_groups').select('id, name, color, sort_order').order('sort_order'),
+    ])
+    setAllSessions(sessionData ?? [])
+    setGroups(groupData ?? [])
     setLoading(false)
   }, [supabase])
 
   useEffect(() => {
     load()
   }, [load])
+
+  const everyoneGroup = groups.find((g) => g.name === 'Everyone')
+  const pickableGroups = groups.filter((g) => g.name !== 'Everyone')
+  const colorByName: Record<string, string> = Object.fromEntries(groups.map((g) => [g.name, g.color]))
+  const everyoneColor = everyoneGroup?.color ?? '#6b7280'
 
   function startAdd() {
     setEditingId('new')
@@ -164,6 +176,40 @@ export default function AdminTimetablePage() {
     load()
   }
 
+  async function updateGroupColor(id: string, color: string) {
+    setGroups((prev) => prev.map((g) => (g.id === id ? { ...g, color } : g)))
+    await supabase.from('timetable_groups').update({ color }).eq('id', id)
+  }
+
+  async function renameGroup(id: string, name: string) {
+    if (!name.trim()) return
+    setGroups((prev) => prev.map((g) => (g.id === id ? { ...g, name: name.trim() } : g)))
+    await supabase.from('timetable_groups').update({ name: name.trim() }).eq('id', id)
+  }
+
+  async function addGroup(e: React.FormEvent) {
+    e.preventDefault()
+    if (!newGroupName.trim()) return
+    await supabase
+      .from('timetable_groups')
+      .insert({ name: newGroupName.trim(), color: newGroupColor, sort_order: groups.length })
+    setNewGroupName('')
+    setNewGroupColor('#f59e0b')
+    load()
+  }
+
+  async function deleteGroup(id: string, name: string) {
+    if (name === 'Everyone') return
+    if (
+      !confirm(
+        `Remove "${name}" from the group list? Sessions already using it will just show grey until you pick a new group for them.`
+      )
+    )
+      return
+    await supabase.from('timetable_groups').delete().eq('id', id)
+    load()
+  }
+
   const weekStart = useMemo(() => startOfWeek(date), [date])
   const weekDays = useMemo(() => Array.from({ length: 5 }, (_, i) => addDays(weekStart, i)), [weekStart])
   const sessionCountByDate = useMemo(() => {
@@ -196,28 +242,95 @@ export default function AdminTimetablePage() {
     <DashboardShell roleLabel="Participants Attendance Dashboard" navItems={navItems}>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold text-gray-900">Timetable</h1>
-        <button
-          onClick={startAdd}
-          className="rounded-md bg-[#022269] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
-        >
-          + Add Session
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowColours((v) => !v)}
+            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            {showColours ? 'Hide Colours' : 'Edit Colours'}
+          </button>
+          <button
+            onClick={startAdd}
+            className="rounded-md bg-[#022269] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
+          >
+            + Add Session
+          </button>
+        </div>
       </div>
 
-      {/* Colour legend */}
-      <div className="mb-4 flex flex-wrap items-center gap-3 text-xs text-gray-500">
-        <span>Groups:</span>
-        {GROUPS.map((g) => (
-          <span key={g.name} className="flex items-center gap-1.5">
-            <span className={`h-2.5 w-2.5 rounded-full ${g.dot}`} />
-            {g.name}
-          </span>
-        ))}
-        <span className="flex items-center gap-1.5">
-          <span className={`h-2.5 w-2.5 rounded-full ${EVERYONE_STYLE.dot}`} />
-          Everyone
-        </span>
-      </div>
+      {showColours ? (
+        <div className="mb-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h2 className="mb-4 text-base font-semibold text-gray-900">Group colours</h2>
+          <div className="space-y-3">
+            {groups.map((g) => (
+              <div key={g.id} className="flex flex-wrap items-center gap-3">
+                <input
+                  type="color"
+                  value={g.color}
+                  onChange={(e) => updateGroupColor(g.id, e.target.value)}
+                  className="h-9 w-9 cursor-pointer rounded border border-gray-300"
+                />
+                {g.name === 'Everyone' ? (
+                  <span className="w-48 text-sm font-medium text-gray-900">Everyone (default)</span>
+                ) : (
+                  <input
+                    type="text"
+                    defaultValue={g.name}
+                    onBlur={(e) => renameGroup(g.id, e.target.value)}
+                    className="w-48 rounded-md border border-gray-300 px-2 py-1 text-sm"
+                  />
+                )}
+                <span
+                  className="rounded-full border px-2 py-1 text-xs font-medium"
+                  style={colorStyle(g.color)}
+                >
+                  Preview
+                </span>
+                {g.name !== 'Everyone' && (
+                  <button
+                    onClick={() => deleteGroup(g.id, g.name)}
+                    className="text-xs font-medium text-red-600 hover:underline"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <form onSubmit={addGroup} className="mt-4 flex flex-wrap items-center gap-3 border-t border-gray-100 pt-4">
+            <input
+              type="color"
+              value={newGroupColor}
+              onChange={(e) => setNewGroupColor(e.target.value)}
+              className="h-9 w-9 cursor-pointer rounded border border-gray-300"
+            />
+            <input
+              type="text"
+              value={newGroupName}
+              onChange={(e) => setNewGroupName(e.target.value)}
+              placeholder="New group name"
+              className="w-48 rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+            />
+            <button
+              type="submit"
+              className="rounded-md bg-[#022269] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
+            >
+              + Add Group
+            </button>
+          </form>
+        </div>
+      ) : (
+        <div className="mb-4 flex flex-wrap items-center gap-3 text-xs text-gray-500">
+          <span>Groups:</span>
+          {groups.map((g) => (
+            <span key={g.id} className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: g.color }} />
+              {g.name}
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Week strip - quick day navigation */}
       <div className="mb-6 flex flex-wrap items-center gap-2">
@@ -324,8 +437,8 @@ export default function AdminTimetablePage() {
                   className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#022269] focus:outline-none sm:w-56"
                 >
                   <option value="">Everyone</option>
-                  {GROUPS.map((g) => (
-                    <option key={g.name} value={g.name}>
+                  {pickableGroups.map((g) => (
+                    <option key={g.id} value={g.name}>
                       {g.name}
                     </option>
                   ))}
@@ -406,14 +519,15 @@ export default function AdminTimetablePage() {
               </div>
               <div className="flex-1 space-y-2">
                 {block.rows.map((s) => {
-                  const style = s.group_name ? GROUP_STYLE[s.group_name] ?? EVERYONE_STYLE : EVERYONE_STYLE
+                  const hex = s.group_name ? colorByName[s.group_name] ?? everyoneColor : everyoneColor
                   return (
                     <div
                       key={s.id}
-                      className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 shadow-sm ${style.badge}`}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 shadow-sm"
+                      style={colorStyle(hex)}
                     >
                       <div className="flex items-center gap-2">
-                        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${style.dot}`} />
+                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: hex }} />
                         <div>
                           <p className="font-medium">{s.title}</p>
                           <p className="text-xs opacity-80">
