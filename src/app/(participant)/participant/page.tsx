@@ -2,7 +2,7 @@ import DashboardShell from '@/components/DashboardShell'
 
 const navItems = [
   { label: 'Dashboard', href: '/participant' },
-  { label: 'My Timetable', href: '/participant/timetable' },
+  { label: 'My Masterplan Phase 3', href: '/participant/timetable' },
   { label: 'My Attendance', href: '/participant/attendance' },
   { label: 'Leave Requests', href: '/participant/leave' },
   { label: 'Announcements', href: '/participant/announcements' },

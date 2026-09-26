@@ -11,7 +11,7 @@ const navItems = [
   { label: 'Facilitators', href: '/admin/facilitators' },
   { label: 'Attendance', href: '/admin/attendance' },
   { label: 'Leave Requests', href: '/admin/leave-requests' },
-  { label: 'Timetable', href: '/admin/timetable' },
+  { label: 'Masterplan Phase 3', href: '/admin/timetable' },
   { label: 'Announcements', href: '/admin/announcements' },
   { label: 'Families', href: '/admin/groups' },
   { label: 'Settings', href: '/admin/settings' },

@@ -10,7 +10,7 @@ const navItems = [
   { label: 'Facilitators', href: '/admin/facilitators' },
   { label: 'Attendance', href: '/admin/attendance' },
   { label: 'Leave Requests', href: '/admin/leave-requests' },
-  { label: 'Timetable', href: '/admin/timetable' },
+  { label: 'Masterplan Phase 3', href: '/admin/timetable' },
   { label: 'Announcements', href: '/admin/announcements' },
   { label: 'Families', href: '/admin/groups' },
   { label: 'Settings', href: '/admin/settings' },
@@ -418,7 +418,7 @@ export default function AdminTimetablePage() {
   return (
     <DashboardShell roleLabel="Participants Attendance Dashboard" navItems={navItems}>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold text-gray-900">Timetable</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Masterplan Phase 3</h1>
         <div className="flex gap-2">
           <button
             onClick={() => setShowColours((v) => !v)}

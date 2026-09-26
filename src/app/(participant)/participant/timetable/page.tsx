@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 
 const navItems = [
   { label: 'Dashboard', href: '/participant' },
-  { label: 'My Timetable', href: '/participant/timetable' },
+  { label: 'My Masterplan Phase 3', href: '/participant/timetable' },
   { label: 'My Attendance', href: '/participant/attendance' },
   { label: 'Leave Requests', href: '/participant/leave' },
   { label: 'Announcements', href: '/participant/announcements' },
@@ -122,7 +122,7 @@ export default function ParticipantTimetablePage() {
 
   return (
     <DashboardShell roleLabel="Participant" navItems={navItems}>
-      <h1 className="mb-2 text-2xl font-semibold text-gray-900">My Timetable</h1>
+      <h1 className="mb-2 text-2xl font-semibold text-gray-900">My Masterplan Phase 3</h1>
       <p className="mb-6 text-sm text-gray-500">
         Look for your own group&apos;s colour in each time slot.
       </p>

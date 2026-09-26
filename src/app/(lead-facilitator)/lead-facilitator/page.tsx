@@ -5,7 +5,7 @@ const navItems = [
   { label: 'Participants', href: '/lead-facilitator/participants' },
   { label: 'Facilitators', href: '/lead-facilitator/facilitators' },
   { label: 'Attendance', href: '/lead-facilitator/attendance' },
-  { label: 'Timetable', href: '/lead-facilitator/timetable' },
+  { label: 'Masterplan Phase 3', href: '/lead-facilitator/timetable' },
   { label: 'Announcements', href: '/lead-facilitator/announcements' },
   { label: 'Progress Tracking', href: '/lead-facilitator/progress' },
 ]
