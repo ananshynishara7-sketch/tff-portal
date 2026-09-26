@@ -24,6 +24,7 @@ type SessionRow = {
   group_name: string | null
   facilitator_name: string | null
   co_facilitator_name: string | null
+  color: string | null
 }
 
 const todayISO = () => new Date().toISOString().slice(0, 10)
@@ -67,7 +68,7 @@ export default function ParticipantTimetablePage() {
     const [{ data }, { data: groupData }] = await Promise.all([
       supabase
         .from('sessions')
-        .select('id, title, date, start_time, end_time, group_name, facilitator_name, co_facilitator_name')
+        .select('id, title, date, start_time, end_time, group_name, facilitator_name, co_facilitator_name, color')
         .gte('date', todayISO())
         .order('date')
         .order('start_time'),
@@ -134,7 +135,7 @@ export default function ParticipantTimetablePage() {
               </h2>
               <div className="space-y-2">
                 {day.rows.map((s) => {
-                  const hex = s.group_name ? colorByName[s.group_name] ?? everyoneColor : everyoneColor
+                  const hex = s.color || (s.group_name ? colorByName[s.group_name] ?? everyoneColor : everyoneColor)
                   return (
                     <div
                       key={s.id}

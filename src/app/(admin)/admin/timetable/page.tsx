@@ -34,6 +34,7 @@ type SessionRow = {
   group_name: string | null
   facilitator_name: string | null
   co_facilitator_name: string | null
+  color: string | null
 }
 
 const todayISO = () => new Date().toISOString().slice(0, 10)
@@ -84,6 +85,7 @@ export default function AdminTimetablePage() {
     group_name: '',
     facilitator_name: '',
     co_facilitator_name: '',
+    color: '',
   }
   const [form, setForm] = useState(emptyForm)
 
@@ -92,7 +94,7 @@ export default function AdminTimetablePage() {
     const [{ data: sessionData }, { data: groupData }] = await Promise.all([
       supabase
         .from('sessions')
-        .select('id, title, date, start_time, end_time, group_name, facilitator_name, co_facilitator_name')
+        .select('id, title, date, start_time, end_time, group_name, facilitator_name, co_facilitator_name, color')
         .order('date')
         .order('start_time'),
       supabase.from('timetable_groups').select('id, name, color, sort_order').order('sort_order'),
@@ -127,6 +129,7 @@ export default function AdminTimetablePage() {
       group_name: row.group_name ?? '',
       facilitator_name: row.facilitator_name ?? '',
       co_facilitator_name: row.co_facilitator_name ?? '',
+      color: row.color ?? '',
     })
     setError(null)
   }
@@ -157,6 +160,7 @@ export default function AdminTimetablePage() {
       group_name: form.group_name || null,
       facilitator_name: form.facilitator_name || null,
       co_facilitator_name: form.co_facilitator_name || null,
+      color: form.color || null,
     }
 
     if (editingId === 'new') {
@@ -433,7 +437,16 @@ export default function AdminTimetablePage() {
                 <label className="mb-1 block text-sm font-medium text-gray-700">Group</label>
                 <select
                   value={form.group_name}
-                  onChange={(e) => setForm((f) => ({ ...f, group_name: e.target.value }))}
+                  onChange={(e) => {
+                    const name = e.target.value
+                    setForm((f) => ({
+                      ...f,
+                      group_name: name,
+                      // Suggest that group's colour, but only if a colour
+                      // hasn't been picked by hand already for this session.
+                      color: f.color ? f.color : name ? colorByName[name] ?? f.color : everyoneColor,
+                    }))
+                  }}
                   className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#022269] focus:outline-none sm:w-56"
                 >
                   <option value="">Everyone</option>
@@ -443,6 +456,24 @@ export default function AdminTimetablePage() {
                     </option>
                   ))}
                 </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Colour</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={form.color || everyoneColor}
+                    onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}
+                    className="h-9 w-9 cursor-pointer rounded border border-gray-300"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, color: '' }))}
+                    className="text-xs text-gray-500 underline hover:text-gray-700"
+                  >
+                    Use group&apos;s colour
+                  </button>
+                </div>
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">Facilitator</label>
@@ -519,7 +550,7 @@ export default function AdminTimetablePage() {
               </div>
               <div className="flex-1 space-y-2">
                 {block.rows.map((s) => {
-                  const hex = s.group_name ? colorByName[s.group_name] ?? everyoneColor : everyoneColor
+                  const hex = s.color || (s.group_name ? colorByName[s.group_name] ?? everyoneColor : everyoneColor)
                   return (
                     <div
                       key={s.id}
