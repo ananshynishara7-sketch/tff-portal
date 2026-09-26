@@ -449,7 +449,8 @@ export default function AdminTimetablePage() {
                   }}
                   className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#022269] focus:outline-none sm:w-56"
                 >
-                  <option value="">Everyone</option>
+                  <option value=""></option>
+                  <option value="Everyone">Everyone</option>
                   {pickableGroups.map((g) => (
                     <option key={g.id} value={g.name}>
                       {g.name}
