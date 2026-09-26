@@ -242,6 +242,156 @@ export default function AdminTimetablePage() {
     return blocks
   }, [daySessions])
 
+  // The Add/Edit Session form - shared by the "New session" spot at the top
+  // and by the inline editor that replaces a session's own card, so editing
+  // "Lunch" doesn't jump you away from Lunch.
+  function renderSessionForm(heading: string) {
+    return (
+      <div className="mb-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <h2 className="mb-4 text-base font-semibold text-gray-900">{heading}</h2>
+        <form onSubmit={saveSession} className="space-y-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Title</label>
+            <input
+              type="text"
+              value={form.title}
+              onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+              placeholder="e.g. English Language"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#022269] focus:outline-none sm:w-96"
+            />
+          </div>
+
+          <div className="flex flex-wrap gap-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Date</label>
+              <input
+                type="date"
+                value={form.date}
+                onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
+                className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#022269] focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Start time</label>
+              <input
+                type="time"
+                value={form.start_time}
+                onChange={(e) => setForm((f) => ({ ...f, start_time: e.target.value }))}
+                className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#022269] focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">End time</label>
+              <input
+                type="time"
+                value={form.end_time}
+                onChange={(e) => setForm((f) => ({ ...f, end_time: e.target.value }))}
+                className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#022269] focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Group</label>
+              <select
+                value={form.group_name}
+                onChange={(e) => {
+                  const name = e.target.value
+                  setForm((f) => ({
+                    ...f,
+                    group_name: name,
+                    // Suggest that group's colour, but only if a colour
+                    // hasn't been picked by hand already for this session.
+                    color: f.color ? f.color : name ? colorByName[name] ?? f.color : everyoneColor,
+                  }))
+                }}
+                className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#022269] focus:outline-none sm:w-56"
+              >
+                <option value=""></option>
+                <option value="Everyone">Everyone</option>
+                {pickableGroups.map((g) => (
+                  <option key={g.id} value={g.name}>
+                    {g.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Colour</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={form.color || everyoneColor}
+                  onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}
+                  className="h-9 w-9 cursor-pointer rounded border border-gray-300"
+                />
+                <button
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, color: '' }))}
+                  className="text-xs text-gray-500 underline hover:text-gray-700"
+                >
+                  Use group&apos;s colour
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Facilitator</label>
+              <select
+                value={form.facilitator_name}
+                onChange={(e) => setForm((f) => ({ ...f, facilitator_name: e.target.value }))}
+                className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#022269] focus:outline-none sm:w-56"
+              >
+                <option value="">Not assigned yet</option>
+                <option value="All Facilitators">All Facilitators</option>
+                {FACILITATORS.map((f) => (
+                  <option key={f} value={f}>
+                    {f}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Co-facilitator</label>
+              <select
+                value={form.co_facilitator_name}
+                onChange={(e) => setForm((f) => ({ ...f, co_facilitator_name: e.target.value }))}
+                className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#022269] focus:outline-none sm:w-56"
+              >
+                <option value="">Not assigned yet</option>
+                <option value="All Facilitators">All Facilitators</option>
+                {FACILITATORS.map((f) => (
+                  <option key={f} value={f}>
+                    {f}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {error && <p className="text-sm text-red-600">{error}</p>}
+
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded-md bg-[#022269] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+            >
+              {saving ? 'Saving...' : 'Save'}
+            </button>
+            <button
+              type="button"
+              onClick={cancelEdit}
+              className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    )
+  }
+
   return (
     <DashboardShell roleLabel="Participants Attendance Dashboard" navItems={navItems}>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
@@ -385,152 +535,7 @@ export default function AdminTimetablePage() {
         />
       </div>
 
-      {editingId && (
-        <div className="mb-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-          <h2 className="mb-4 text-base font-semibold text-gray-900">
-            {editingId === 'new' ? 'New session' : 'Edit session'}
-          </h2>
-          <form onSubmit={saveSession} className="space-y-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Title</label>
-              <input
-                type="text"
-                value={form.title}
-                onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                placeholder="e.g. English Language"
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#022269] focus:outline-none sm:w-96"
-              />
-            </div>
-
-            <div className="flex flex-wrap gap-4">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Date</label>
-                <input
-                  type="date"
-                  value={form.date}
-                  onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
-                  className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#022269] focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Start time</label>
-                <input
-                  type="time"
-                  value={form.start_time}
-                  onChange={(e) => setForm((f) => ({ ...f, start_time: e.target.value }))}
-                  className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#022269] focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">End time</label>
-                <input
-                  type="time"
-                  value={form.end_time}
-                  onChange={(e) => setForm((f) => ({ ...f, end_time: e.target.value }))}
-                  className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#022269] focus:outline-none"
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-4">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Group</label>
-                <select
-                  value={form.group_name}
-                  onChange={(e) => {
-                    const name = e.target.value
-                    setForm((f) => ({
-                      ...f,
-                      group_name: name,
-                      // Suggest that group's colour, but only if a colour
-                      // hasn't been picked by hand already for this session.
-                      color: f.color ? f.color : name ? colorByName[name] ?? f.color : everyoneColor,
-                    }))
-                  }}
-                  className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#022269] focus:outline-none sm:w-56"
-                >
-                  <option value=""></option>
-                  <option value="Everyone">Everyone</option>
-                  {pickableGroups.map((g) => (
-                    <option key={g.id} value={g.name}>
-                      {g.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Colour</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={form.color || everyoneColor}
-                    onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}
-                    className="h-9 w-9 cursor-pointer rounded border border-gray-300"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setForm((f) => ({ ...f, color: '' }))}
-                    className="text-xs text-gray-500 underline hover:text-gray-700"
-                  >
-                    Use group&apos;s colour
-                  </button>
-                </div>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Facilitator</label>
-                <select
-                  value={form.facilitator_name}
-                  onChange={(e) => setForm((f) => ({ ...f, facilitator_name: e.target.value }))}
-                  className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#022269] focus:outline-none sm:w-56"
-                >
-                  <option value="">Not assigned yet</option>
-                  <option value="All Facilitators">All Facilitators</option>
-                  {FACILITATORS.map((f) => (
-                    <option key={f} value={f}>
-                      {f}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Co-facilitator</label>
-                <select
-                  value={form.co_facilitator_name}
-                  onChange={(e) => setForm((f) => ({ ...f, co_facilitator_name: e.target.value }))}
-                  className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#022269] focus:outline-none sm:w-56"
-                >
-                  <option value="">Not assigned yet</option>
-                  <option value="All Facilitators">All Facilitators</option>
-                  {FACILITATORS.map((f) => (
-                    <option key={f} value={f}>
-                      {f}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {error && <p className="text-sm text-red-600">{error}</p>}
-
-            <div className="flex gap-2">
-              <button
-                type="submit"
-                disabled={saving}
-                className="rounded-md bg-[#022269] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
-              >
-                {saving ? 'Saving...' : 'Save'}
-              </button>
-              <button
-                type="button"
-                onClick={cancelEdit}
-                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+      {editingId === 'new' && renderSessionForm('New session')}
 
       <h2 className="mb-3 text-lg font-semibold text-gray-900">
         {dayNames[new Date(date + 'T00:00:00Z').getUTCDay()]}, {date}
@@ -553,6 +558,12 @@ export default function AdminTimetablePage() {
               </div>
               <div className="flex-1 space-y-2">
                 {block.rows.map((s) => {
+                  // Editing this exact session replaces its card with the
+                  // form, right where it is - no jumping to the top.
+                  if (s.id === editingId) {
+                    return <div key={s.id}>{renderSessionForm('Edit session')}</div>
+                  }
+
                   const hex = s.color || (s.group_name ? colorByName[s.group_name] ?? everyoneColor : everyoneColor)
                   return (
                     <div
