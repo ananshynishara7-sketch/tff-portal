@@ -61,7 +61,6 @@ export default function AdminDashboard() {
   const [date, setDate] = useState(todayISO())
   const [loading, setLoading] = useState(true)
   const [totalParticipants, setTotalParticipants] = useState(0)
-  const [totalFacilitators, setTotalFacilitators] = useState(0)
   const [dayCounts, setDayCounts] = useState({
     present: 0, late: 0, authAbsence: 0, notAuth: 0, ha: 0, hn: 0, notMarked: 0,
   })
@@ -74,7 +73,6 @@ export default function AdminDashboard() {
 
     const [
       { count: participantCount },
-      { count: facilitatorCount },
       { data: families },
       { data: participants },
       { data: dayAttendance },
@@ -82,7 +80,6 @@ export default function AdminDashboard() {
       { data: leaveRequests },
     ] = await Promise.all([
       supabase.from('participants').select('*', { count: 'exact', head: true }).eq('status', 'Active'),
-      supabase.from('profiles').select('*', { count: 'exact', head: true }).in('role', ['facilitator', 'facilitator_support', 'lead_facilitator']),
       supabase.from('families').select('id, name, display_color').order('name'),
       supabase.from('participants').select('id, family_id').eq('status', 'Active'),
       supabase.from('attendance_records').select('participant_id, code').eq('date', date),
@@ -95,7 +92,6 @@ export default function AdminDashboard() {
     ])
 
     setTotalParticipants(participantCount ?? 0)
-    setTotalFacilitators(facilitatorCount ?? 0)
 
     const familyIdByParticipant: Record<string, string | null> = {}
     for (const p of participants ?? []) familyIdByParticipant[p.id] = p.family_id
@@ -233,7 +229,7 @@ export default function AdminDashboard() {
   return (
     <DashboardShell roleLabel="Administration" navItems={navItems}>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold text-gray-900">Attendance Dashboard</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Participants Attendance Dashboard</h1>
         <div>
           <label className="mr-2 text-sm text-gray-600">Date:</label>
           <input
@@ -258,9 +254,8 @@ export default function AdminDashboard() {
         ))}
       </div>
 
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard label="Total Participants" value={loading ? '—' : String(totalParticipants)} />
-        <StatCard label="Total Facilitators" value={loading ? '—' : String(totalFacilitators)} />
         <StatCard label="Present (Selected Day)" value={loading ? '—' : String(dayCounts.present)} />
         <StatCard label="Not Marked Yet" value={loading ? '—' : String(dayCounts.notMarked)} />
       </div>
