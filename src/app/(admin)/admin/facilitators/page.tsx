@@ -40,6 +40,14 @@ type LeaveEntry = {
   created_at: string
 }
 
+type Announcement = {
+  id: string
+  title: string
+  body: string
+  urgent: boolean
+  posted_at: string
+}
+
 const LEAVE_TYPES = [
   'Full day - sick leave',
   'Half day - sick',
@@ -61,6 +69,13 @@ export default function FacilitatorsPage() {
   const [showAddFacilitator, setShowAddFacilitator] = useState(false)
   const [newFacilitatorName, setNewFacilitatorName] = useState('')
 
+  const [announcements, setAnnouncements] = useState<Announcement[]>([])
+  const [showAddAnnouncement, setShowAddAnnouncement] = useState(false)
+  const [announcementTitle, setAnnouncementTitle] = useState('')
+  const [announcementBody, setAnnouncementBody] = useState('')
+  const [announcementUrgent, setAnnouncementUrgent] = useState(false)
+  const [savingAnnouncement, setSavingAnnouncement] = useState(false)
+
   const [showAddLeave, setShowAddLeave] = useState(false)
   const [leaveStart, setLeaveStart] = useState(todayISO())
   const [leaveEnd, setLeaveEnd] = useState(todayISO())
@@ -70,12 +85,18 @@ export default function FacilitatorsPage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [{ data: facilitatorData }, { data: leaveData }] = await Promise.all([
+    const [{ data: facilitatorData }, { data: leaveData }, { data: announcementData }] = await Promise.all([
       supabase.from('facilitators').select('*').order('sort_order').order('full_name'),
       supabase.from('facilitator_leave').select('*').order('leave_start_date', { ascending: false }),
+      supabase
+        .from('announcements')
+        .select('id, title, body, urgent, posted_at')
+        .eq('target_role', 'facilitator')
+        .order('posted_at', { ascending: false }),
     ])
     setFacilitators(facilitatorData ?? [])
     setLeave(leaveData ?? [])
+    setAnnouncements(announcementData ?? [])
     setLoading(false)
   }, [supabase])
 
@@ -133,6 +154,32 @@ export default function FacilitatorsPage() {
     setShowAddFacilitator(false)
     await load()
     if (data) setSelectedId(data.id)
+  }
+
+  async function postAnnouncement(e: React.FormEvent) {
+    e.preventDefault()
+    if (!announcementTitle.trim() || !announcementBody.trim()) return
+    setSavingAnnouncement(true)
+    const { data: userData } = await supabase.auth.getUser()
+    await supabase.from('announcements').insert({
+      title: announcementTitle.trim(),
+      body: announcementBody.trim(),
+      urgent: announcementUrgent,
+      target_role: 'facilitator',
+      posted_by: userData.user?.id,
+    })
+    setAnnouncementTitle('')
+    setAnnouncementBody('')
+    setAnnouncementUrgent(false)
+    setShowAddAnnouncement(false)
+    setSavingAnnouncement(false)
+    load()
+  }
+
+  async function deleteAnnouncement(id: string) {
+    if (!confirm('Remove this announcement?')) return
+    await supabase.from('announcements').delete().eq('id', id)
+    load()
   }
 
   async function deleteFacilitator(f: Facilitator) {
@@ -242,6 +289,97 @@ export default function FacilitatorsPage() {
               </p>
               <p className="text-xs text-gray-400">not currently facilitating</p>
             </div>
+          </div>
+
+          {/* Announcements for facilitators */}
+          <div className="mb-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-base font-semibold text-gray-900">Announcements for Facilitators</h2>
+              <button
+                onClick={() => setShowAddAnnouncement((v) => !v)}
+                className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                {showAddAnnouncement ? 'Cancel' : '+ New Announcement'}
+              </button>
+            </div>
+
+            {showAddAnnouncement && (
+              <form onSubmit={postAnnouncement} className="mb-4 space-y-3 border-b border-gray-100 pb-4">
+                <input
+                  type="text"
+                  required
+                  placeholder="Title"
+                  value={announcementTitle}
+                  onChange={(e) => setAnnouncementTitle(e.target.value)}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                />
+                <textarea
+                  required
+                  placeholder="What do facilitators need to know?"
+                  value={announcementBody}
+                  onChange={(e) => setAnnouncementBody(e.target.value)}
+                  rows={3}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                />
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 text-sm text-gray-600">
+                    <input
+                      type="checkbox"
+                      checked={announcementUrgent}
+                      onChange={(e) => setAnnouncementUrgent(e.target.checked)}
+                    />
+                    Mark as urgent
+                  </label>
+                  <button
+                    type="submit"
+                    disabled={savingAnnouncement}
+                    className="rounded-md bg-[#022269] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+                  >
+                    {savingAnnouncement ? 'Posting...' : 'Post'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {announcements.length === 0 ? (
+              <p className="text-sm text-gray-400">No announcements posted for facilitators yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {announcements.map((a) => (
+                  <div
+                    key={a.id}
+                    className={`flex items-start justify-between gap-3 rounded-lg border p-3 text-sm ${
+                      a.urgent ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-gray-50'
+                    }`}
+                  >
+                    <div>
+                      <p className="font-medium text-gray-900">
+                        {a.title}
+                        {a.urgent && (
+                          <span className="ml-2 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-semibold uppercase text-white">
+                            Urgent
+                          </span>
+                        )}
+                      </p>
+                      <p className="mt-0.5 text-gray-600">{a.body}</p>
+                      <p className="mt-1 text-xs text-gray-400">
+                        {new Date(a.posted_at).toLocaleDateString('en-GB', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        })}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => deleteAnnouncement(a.id)}
+                      className="shrink-0 text-xs font-medium text-red-600 hover:underline"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {Object.keys(leaveTypeBreakdownToday).length > 0 && (
