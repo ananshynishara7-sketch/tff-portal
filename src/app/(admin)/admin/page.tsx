@@ -138,13 +138,21 @@ export default function AdminDashboard() {
       row.participants = (participants ?? []).filter((p) => p.family_id === row.id).length
     }
 
-    // attended-equivalent and expected-days counters per family, for %s
+    // Matches the register's own formula (reconstructed from real rows):
+    //   attended = present(1) + late(1) + HA(0.5) + HN(0.5)
+    //   expected = every marked day EXCEPT approved absences (A)
+    //   attendance% = attended / expected
+    //   punctuality% = (attended - late) / attended
+    // Family totals add up days across all participants (not an average of
+    // each participant's %), matching how the Sheet reports family figures.
     const attendedByFamily: Record<string, number> = {}
     const expectedByFamily: Record<string, number> = {}
-    for (const row of termRows) { attendedByFamily[row.id] = 0; expectedByFamily[row.id] = 0 }
-    const onTimeByFamily: Record<string, number> = {}
-    const presentDaysByFamily: Record<string, number> = {}
-    for (const row of termRows) { onTimeByFamily[row.id] = 0; presentDaysByFamily[row.id] = 0 }
+    const lateByFamily: Record<string, number> = {}
+    for (const row of termRows) {
+      attendedByFamily[row.id] = 0
+      expectedByFamily[row.id] = 0
+      lateByFamily[row.id] = 0
+    }
 
     for (const rec of allAttendance ?? []) {
       const familyId = familyIdByParticipant[rec.participant_id]
@@ -156,18 +164,16 @@ export default function AdminDashboard() {
           row.present++
           attendedByFamily[row.id] += 1
           expectedByFamily[row.id] += 1
-          presentDaysByFamily[row.id] += 1
-          onTimeByFamily[row.id] += 1
           break
         case 'L':
           row.late++
+          lateByFamily[row.id] += 1
           attendedByFamily[row.id] += 1
           expectedByFamily[row.id] += 1
-          presentDaysByFamily[row.id] += 1
           break
         case 'A':
           row.authAbsence++
-          // approved absence excluded from the expected-days denominator
+          // approved absence excluded from the expected-days denominator entirely
           break
         case 'N':
           row.notAuth++
@@ -175,16 +181,13 @@ export default function AdminDashboard() {
           break
         case 'HA':
           row.ha++
-          attendedByFamily[row.id] += 1
-          // approved half-day excluded from denominator, like A
-          presentDaysByFamily[row.id] += 1
-          onTimeByFamily[row.id] += 1
+          attendedByFamily[row.id] += 0.5
+          expectedByFamily[row.id] += 1
           break
         case 'HN':
           row.hn++
           attendedByFamily[row.id] += 0.5
           expectedByFamily[row.id] += 1
-          presentDaysByFamily[row.id] += 0.5
           break
       }
     }
@@ -193,8 +196,8 @@ export default function AdminDashboard() {
       const expected = expectedByFamily[row.id]
       const attended = attendedByFamily[row.id]
       row.attendancePct = expected > 0 ? Math.round((attended / expected) * 1000) / 10 : 0
-      const presentDays = presentDaysByFamily[row.id]
-      row.punctualityPct = presentDays > 0 ? Math.round((onTimeByFamily[row.id] / presentDays) * 1000) / 10 : 0
+      const late = lateByFamily[row.id]
+      row.punctualityPct = attended > 0 ? Math.round(((attended - late) / attended) * 1000) / 10 : 0
     }
     setTermFamilyRows(termRows)
 
@@ -323,9 +326,8 @@ export default function AdminDashboard() {
           </tbody>
         </table>
         <p className="border-t border-gray-100 px-4 py-2 text-xs text-gray-400">
-          First-pass formula (present + late + half-day-not-approved count toward attendance; approved
-          absence/half-day excluded from the total). Let me know if a number looks off against the Sheet
-          and I&apos;ll adjust the exact rule.
+          Matched against your register&apos;s own formula. If any number here doesn&apos;t match the
+          Sheet, tell me the participant/date and I&apos;ll correct the exact rule.
         </p>
       </div>
 

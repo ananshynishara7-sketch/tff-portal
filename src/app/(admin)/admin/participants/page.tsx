@@ -40,14 +40,53 @@ export default function ParticipantsPage() {
   const [newFamily, setNewFamily] = useState('')
   const [saving, setSaving] = useState(false)
 
+  const [stats, setStats] = useState<Record<string, { attendancePct: number; punctualityPct: number }>>({})
+
   const loadData = useCallback(async () => {
     setLoading(true)
-    const [{ data: participantsData }, { data: familiesData }] = await Promise.all([
+    const [{ data: participantsData }, { data: familiesData }, { data: attendanceData }] = await Promise.all([
       supabase.from('participants').select('*').order('full_name'),
       supabase.from('families').select('*').order('name'),
+      supabase.from('attendance_records').select('participant_id, code'),
     ])
     setParticipants(participantsData ?? [])
     setFamilies(familiesData ?? [])
+
+    // Same formula as the Dashboard: present/late count fully, HA/HN count
+    // as half, approved absences are excluded from the expected-days total,
+    // and punctuality is that same attended total minus late days.
+    const attended: Record<string, number> = {}
+    const expected: Record<string, number> = {}
+    const late: Record<string, number> = {}
+    for (const rec of attendanceData ?? []) {
+      const id = rec.participant_id
+      attended[id] = attended[id] ?? 0
+      expected[id] = expected[id] ?? 0
+      late[id] = late[id] ?? 0
+      switch (rec.code) {
+        case '/':
+          attended[id] += 1; expected[id] += 1; break
+        case 'L':
+          attended[id] += 1; expected[id] += 1; late[id] += 1; break
+        case 'N':
+          expected[id] += 1; break
+        case 'HA':
+        case 'HN':
+          attended[id] += 0.5; expected[id] += 1; break
+        // 'A' excluded entirely
+      }
+    }
+    const computed: Record<string, { attendancePct: number; punctualityPct: number }> = {}
+    for (const p of participantsData ?? []) {
+      const a = attended[p.id] ?? 0
+      const e = expected[p.id] ?? 0
+      const l = late[p.id] ?? 0
+      computed[p.id] = {
+        attendancePct: e > 0 ? Math.round((a / e) * 1000) / 10 : 0,
+        punctualityPct: a > 0 ? Math.round(((a - l) / a) * 1000) / 10 : 0,
+      }
+    }
+    setStats(computed)
     setLoading(false)
   }, [supabase])
 
@@ -179,6 +218,8 @@ export default function ParticipantsPage() {
                 <th className="px-4 py-3">Group</th>
                 <th className="px-4 py-3">Joining Date</th>
                 <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Attendance %</th>
+                <th className="px-4 py-3">Punctuality %</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -231,11 +272,17 @@ export default function ParticipantsPage() {
                       <option value="Left">Left</option>
                     </select>
                   </td>
+                  <td className="px-4 py-2 font-medium text-gray-900">
+                    {stats[p.id]?.attendancePct ?? 0}%
+                  </td>
+                  <td className="px-4 py-2 font-medium text-gray-900">
+                    {stats[p.id]?.punctualityPct ?? 0}%
+                  </td>
                 </tr>
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-gray-400">
+                  <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
                     No participants match.
                   </td>
                 </tr>
