@@ -48,6 +48,16 @@ type Announcement = {
   posted_at: string
 }
 
+type SessionRow = {
+  id: string
+  title: string
+  start_time: string
+  end_time: string
+  group_name: string | null
+  facilitator_name: string | null
+  co_facilitator_name: string | null
+}
+
 const LEAVE_TYPES = [
   'Full day - sick leave',
   'Half day - sick',
@@ -62,6 +72,7 @@ export default function FacilitatorsPage() {
   const supabase = createClient()
   const [facilitators, setFacilitators] = useState<Facilitator[]>([])
   const [leave, setLeave] = useState<LeaveEntry[]>([])
+  const [todaySessions, setTodaySessions] = useState<SessionRow[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [savingField, setSavingField] = useState(false)
@@ -85,18 +96,25 @@ export default function FacilitatorsPage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [{ data: facilitatorData }, { data: leaveData }, { data: announcementData }] = await Promise.all([
-      supabase.from('facilitators').select('*').order('sort_order').order('full_name'),
-      supabase.from('facilitator_leave').select('*').order('leave_start_date', { ascending: false }),
-      supabase
-        .from('announcements')
-        .select('id, title, body, urgent, posted_at')
-        .eq('target_role', 'facilitator')
-        .order('posted_at', { ascending: false }),
-    ])
+    const [{ data: facilitatorData }, { data: leaveData }, { data: announcementData }, { data: sessionData }] =
+      await Promise.all([
+        supabase.from('facilitators').select('*').order('sort_order').order('full_name'),
+        supabase.from('facilitator_leave').select('*').order('leave_start_date', { ascending: false }),
+        supabase
+          .from('announcements')
+          .select('id, title, body, urgent, posted_at')
+          .eq('target_role', 'facilitator')
+          .order('posted_at', { ascending: false }),
+        supabase
+          .from('sessions')
+          .select('id, title, start_time, end_time, group_name, facilitator_name, co_facilitator_name')
+          .eq('date', todayISO())
+          .order('start_time'),
+      ])
     setFacilitators(facilitatorData ?? [])
     setLeave(leaveData ?? [])
     setAnnouncements(announcementData ?? [])
+    setTodaySessions(sessionData ?? [])
     setLoading(false)
   }, [supabase])
 
@@ -134,6 +152,21 @@ export default function FacilitatorsPage() {
     for (const l of todayLeaveEntries) counts[l.leave_type] = (counts[l.leave_type] ?? 0) + 1
     return counts
   }, [todayLeaveEntries])
+
+  // Matches a name from the Masterplan (free text) to a facilitator record,
+  // so we can tell if today's assigned person is also logged as on leave.
+  const facilitatorByName = useMemo(() => {
+    const map: Record<string, Facilitator> = {}
+    for (const f of facilitators) map[f.full_name.trim().toLowerCase()] = f
+    return map
+  }, [facilitators])
+
+  function onLeaveWarning(name: string | null): string | null {
+    if (!name || name === 'All Facilitators') return null
+    const match = facilitatorByName[name.trim().toLowerCase()]
+    if (match && onLeaveTodayIds.has(match.id)) return `${name} is marked on leave today`
+    return null
+  }
 
   async function updateField(id: string, field: keyof Facilitator, value: string) {
     setFacilitators((prev) => prev.map((f) => (f.id === id ? { ...f, [field]: value } : f)))
@@ -378,6 +411,46 @@ export default function FacilitatorsPage() {
                     </button>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+
+          {/* Today's teaching assignments, from the Masterplan */}
+          <div className="mb-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <h2 className="mb-3 text-base font-semibold text-gray-900">Today&apos;s Teaching Assignments</h2>
+            {todaySessions.length === 0 ? (
+              <p className="text-sm text-gray-400">Nothing on the Masterplan for today.</p>
+            ) : (
+              <div className="space-y-2">
+                {todaySessions.map((s) => {
+                  const warnings = [onLeaveWarning(s.facilitator_name), onLeaveWarning(s.co_facilitator_name)].filter(
+                    (w): w is string => Boolean(w)
+                  )
+                  const people = [s.facilitator_name, s.co_facilitator_name ? `+ ${s.co_facilitator_name}` : null]
+                    .filter(Boolean)
+                    .join(' ')
+                  return (
+                    <div
+                      key={s.id}
+                      className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm ${
+                        warnings.length > 0 ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-gray-50'
+                      }`}
+                    >
+                      <div>
+                        <span className="font-medium text-gray-900">
+                          {s.start_time.slice(0, 5)}–{s.end_time.slice(0, 5)} · {s.title}
+                        </span>
+                        {s.group_name && <span className="ml-2 text-gray-500">({s.group_name})</span>}
+                        {people && <span className="ml-2 text-gray-600">· {people}</span>}
+                      </div>
+                      {warnings.length > 0 && (
+                        <span className="rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-semibold uppercase text-white">
+                          ⚠ {warnings.join(' · ')}
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>
