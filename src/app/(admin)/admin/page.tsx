@@ -73,7 +73,7 @@ type CallLogEntry = {
 // Lead Facilitator (matches who's allowed to make these calls).
 const CALL_LOG_CALLERS = [
   'Lead Facilitator', 'Suba', 'Jeyastan', 'Nishara', 'Gajan', 'Jenny',
-  'Rageethan', 'Thuvarahan', 'Dakshika', 'Jericksha',
+  'Rageethan', 'Thuvarahan', 'Dakshika', 'Jericksha', 'Suganya',
 ]
 
 const CALL_OUTCOMES = [
