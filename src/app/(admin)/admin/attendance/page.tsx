@@ -9,6 +9,7 @@ const navItems = [
   { label: 'Participants', href: '/admin/participants' },
   { label: 'Facilitators', href: '/admin/facilitators' },
   { label: 'Attendance', href: '/admin/attendance' },
+  { label: 'Leave Requests', href: '/admin/leave-requests' },
   { label: 'Timetable', href: '/admin/timetable' },
   { label: 'Announcements', href: '/admin/announcements' },
   { label: 'Families', href: '/admin/groups' },
