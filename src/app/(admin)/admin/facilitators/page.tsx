@@ -35,9 +35,18 @@ type LeaveEntry = {
   facilitator_id: string
   leave_start_date: string
   leave_end_date: string
+  leave_type: string
   reason: string | null
   created_at: string
 }
+
+const LEAVE_TYPES = [
+  'Full day - sick leave',
+  'Half day - sick',
+  'Full day - casual',
+  'Half day - casual',
+  'Short leave',
+]
 
 const todayISO = () => new Date().toISOString().slice(0, 10)
 
@@ -55,6 +64,7 @@ export default function FacilitatorsPage() {
   const [showAddLeave, setShowAddLeave] = useState(false)
   const [leaveStart, setLeaveStart] = useState(todayISO())
   const [leaveEnd, setLeaveEnd] = useState(todayISO())
+  const [leaveType, setLeaveType] = useState(LEAVE_TYPES[0])
   const [leaveReason, setLeaveReason] = useState('')
   const [savingLeave, setSavingLeave] = useState(false)
 
@@ -90,6 +100,19 @@ export default function FacilitatorsPage() {
 
   const selected = facilitators.find((f) => f.id === selectedId) ?? null
   const selectedLeave = leave.filter((l) => l.facilitator_id === selectedId)
+
+  const activeFacilitators = facilitators.filter((f) => f.status === 'Active')
+  const todayLeaveEntries = useMemo(
+    () => leave.filter((l) => l.leave_start_date <= today && today <= l.leave_end_date),
+    [leave, today]
+  )
+  const activeOnLeaveTodayCount = activeFacilitators.filter((f) => onLeaveTodayIds.has(f.id)).length
+  const presentTodayCount = activeFacilitators.length - activeOnLeaveTodayCount
+  const leaveTypeBreakdownToday = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const l of todayLeaveEntries) counts[l.leave_type] = (counts[l.leave_type] ?? 0) + 1
+    return counts
+  }, [todayLeaveEntries])
 
   async function updateField(id: string, field: keyof Facilitator, value: string) {
     setFacilitators((prev) => prev.map((f) => (f.id === id ? { ...f, [field]: value } : f)))
@@ -132,11 +155,13 @@ export default function FacilitatorsPage() {
       facilitator_id: selectedId,
       leave_start_date: leaveStart,
       leave_end_date: leaveEnd,
+      leave_type: leaveType,
       reason: leaveReason.trim() || null,
       logged_by: userData.user?.id,
     })
     setLeaveStart(todayISO())
     setLeaveEnd(todayISO())
+    setLeaveType(LEAVE_TYPES[0])
     setLeaveReason('')
     setShowAddLeave(false)
     setSavingLeave(false)
@@ -193,6 +218,46 @@ export default function FacilitatorsPage() {
         </div>
       ) : (
         <>
+          {/* Today's dashboard */}
+          <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+              <p className="text-xs font-medium text-gray-500">Facilitators</p>
+              <p className="mt-1 text-2xl font-semibold text-gray-900">{facilitators.length}</p>
+              <p className="text-xs text-gray-400">{activeFacilitators.length} active</p>
+            </div>
+            <div className="rounded-xl border border-green-200 bg-green-50 p-4 shadow-sm">
+              <p className="text-xs font-medium text-green-700">Present Today</p>
+              <p className="mt-1 text-2xl font-semibold text-green-800">{presentTodayCount}</p>
+              <p className="text-xs text-green-600">of {activeFacilitators.length} active</p>
+            </div>
+            <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4 shadow-sm">
+              <p className="text-xs font-medium text-yellow-700">On Leave Today</p>
+              <p className="mt-1 text-2xl font-semibold text-yellow-800">{todayLeaveEntries.length}</p>
+              <p className="text-xs text-yellow-600">{activeOnLeaveTodayCount} of them active</p>
+            </div>
+            <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+              <p className="text-xs font-medium text-gray-500">Inactive</p>
+              <p className="mt-1 text-2xl font-semibold text-gray-900">
+                {facilitators.length - activeFacilitators.length}
+              </p>
+              <p className="text-xs text-gray-400">not currently facilitating</p>
+            </div>
+          </div>
+
+          {Object.keys(leaveTypeBreakdownToday).length > 0 && (
+            <div className="mb-6 flex flex-wrap items-center gap-2 text-xs">
+              <span className="font-medium text-gray-500">Today&apos;s leave breakdown:</span>
+              {LEAVE_TYPES.filter((t) => leaveTypeBreakdownToday[t]).map((t) => (
+                <span
+                  key={t}
+                  className="rounded-full border border-yellow-200 bg-yellow-50 px-2.5 py-1 font-medium text-yellow-800"
+                >
+                  {t}: {leaveTypeBreakdownToday[t]}
+                </span>
+              ))}
+            </div>
+          )}
+
           {/* Tabs - one per facilitator */}
           <div className="mb-4 flex flex-wrap gap-2 border-b border-gray-200 pb-3">
             {facilitators.map((f) => (
@@ -330,8 +395,22 @@ export default function FacilitatorsPage() {
                         className="rounded-md border border-gray-300 px-3 py-2 text-sm"
                       />
                     </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-gray-600">Leave type</label>
+                      <select
+                        value={leaveType}
+                        onChange={(e) => setLeaveType(e.target.value)}
+                        className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+                      >
+                        {LEAVE_TYPES.map((t) => (
+                          <option key={t} value={t}>
+                            {t}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                     <div className="flex-1">
-                      <label className="mb-1 block text-xs font-medium text-gray-600">Reason (optional)</label>
+                      <label className="mb-1 block text-xs font-medium text-gray-600">Notes (optional)</label>
                       <input
                         type="text"
                         value={leaveReason}
@@ -373,6 +452,7 @@ export default function FacilitatorsPage() {
                                 ? l.leave_start_date
                                 : `${l.leave_start_date} – ${l.leave_end_date}`}
                             </span>
+                            <span className="ml-2 opacity-80">· {l.leave_type}</span>
                             {l.reason && <span className="ml-2 opacity-80">· {l.reason}</span>}
                             {isCurrent && (
                               <span className="ml-2 rounded-full bg-yellow-400 px-2 py-0.5 text-[10px] font-semibold uppercase text-white">
