@@ -141,18 +141,17 @@ export default function AdminDashboard() {
 
     // Matches the register's own formula (reconstructed from real rows):
     //   attended = present(1) + late(1) + HA(0.5) + HN(0.5)
-    //   expected = every marked day EXCEPT approved absences (A)
+    //   expected = every marked day EXCEPT approved absences (A);
+    //     a half-day approved (HA) only costs half a day here, HN costs a full day
     //   attendance% = attended / expected
-    //   punctuality% = (attended - late) / attended
+    //   punctuality% = present / (present + late) - half days never affect it
     // Family totals add up days across all participants (not an average of
     // each participant's %), matching how the Sheet reports family figures.
     const attendedByFamily: Record<string, number> = {}
     const expectedByFamily: Record<string, number> = {}
-    const lateByFamily: Record<string, number> = {}
     for (const row of termRows) {
       attendedByFamily[row.id] = 0
       expectedByFamily[row.id] = 0
-      lateByFamily[row.id] = 0
     }
 
     for (const rec of allAttendance ?? []) {
@@ -168,7 +167,6 @@ export default function AdminDashboard() {
           break
         case 'L':
           row.late++
-          lateByFamily[row.id] += 1
           attendedByFamily[row.id] += 1
           expectedByFamily[row.id] += 1
           break
@@ -183,7 +181,7 @@ export default function AdminDashboard() {
         case 'HA':
           row.ha++
           attendedByFamily[row.id] += 0.5
-          expectedByFamily[row.id] += 1
+          expectedByFamily[row.id] += 0.5
           break
         case 'HN':
           row.hn++
@@ -197,8 +195,11 @@ export default function AdminDashboard() {
       const expected = expectedByFamily[row.id]
       const attended = attendedByFamily[row.id]
       row.attendancePct = expected > 0 ? Math.round((attended / expected) * 1000) / 10 : 0
-      const late = lateByFamily[row.id]
-      row.punctualityPct = attended > 0 ? Math.round(((attended - late) / attended) * 1000) / 10 : 0
+      // Punctuality only looks at on-time vs late days - half days never affect it.
+      row.punctualityPct =
+        row.present + row.late > 0
+          ? Math.round((row.present / (row.present + row.late)) * 1000) / 10
+          : 0
     }
     setTermFamilyRows(termRows)
 

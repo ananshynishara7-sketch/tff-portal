@@ -40,50 +40,71 @@ export default function ParticipantsPage() {
   const [newFamily, setNewFamily] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const [stats, setStats] = useState<Record<string, { attendancePct: number; punctualityPct: number }>>({})
+  const [stats, setStats] = useState<Record<string, {
+    attendancePct: number; punctualityPct: number; overallAttendancePct: number; overallPunctualityPct: number
+  }>>({})
 
   const loadData = useCallback(async () => {
     setLoading(true)
-    const [{ data: participantsData }, { data: familiesData }, { data: attendanceData }] = await Promise.all([
-      supabase.from('participants').select('*').order('full_name'),
-      supabase.from('families').select('*').order('name'),
-      supabase.from('attendance_records').select('participant_id, code'),
-    ])
+    const [{ data: participantsData }, { data: familiesData }, { data: attendanceData }, { data: historyData }] =
+      await Promise.all([
+        supabase.from('participants').select('*').order('full_name'),
+        supabase.from('families').select('*').order('name'),
+        supabase.from('attendance_records').select('participant_id, code'),
+        supabase.from('historical_phase_totals').select('*'),
+      ])
     setParticipants(participantsData ?? [])
     setFamilies(familiesData ?? [])
 
-    // Same formula as the Dashboard: present/late count fully, HA/HN count
-    // as half, approved absences are excluded from the expected-days total,
-    // and punctuality is that same attended total minus late days.
-    const attended: Record<string, number> = {}
-    const expected: Record<string, number> = {}
-    const late: Record<string, number> = {}
+    // Raw Phase 3 day counts per participant.
+    const raw: Record<string, { present: number; late: number; notAuth: number; ha: number; hn: number }> = {}
     for (const rec of attendanceData ?? []) {
       const id = rec.participant_id
-      attended[id] = attended[id] ?? 0
-      expected[id] = expected[id] ?? 0
-      late[id] = late[id] ?? 0
+      raw[id] = raw[id] ?? { present: 0, late: 0, notAuth: 0, ha: 0, hn: 0 }
       switch (rec.code) {
-        case '/':
-          attended[id] += 1; expected[id] += 1; break
-        case 'L':
-          attended[id] += 1; expected[id] += 1; late[id] += 1; break
-        case 'N':
-          expected[id] += 1; break
-        case 'HA':
-        case 'HN':
-          attended[id] += 0.5; expected[id] += 1; break
+        case '/': raw[id].present++; break
+        case 'L': raw[id].late++; break
+        case 'N': raw[id].notAuth++; break
+        case 'HA': raw[id].ha++; break
+        case 'HN': raw[id].hn++; break
         // 'A' excluded entirely
       }
     }
-    const computed: Record<string, { attendancePct: number; punctualityPct: number }> = {}
+
+    const history: Record<string, {
+      p1_attended: number; p1_expected: number; p1_present: number; p1_present_late: number
+      p2_attended: number; p2_expected: number; p2_present: number; p2_present_late: number
+    }> = {}
+    for (const h of historyData ?? []) history[h.participant_id] = h
+
+    const computed: Record<string, {
+      attendancePct: number; punctualityPct: number; overallAttendancePct: number; overallPunctualityPct: number
+    }> = {}
     for (const p of participantsData ?? []) {
-      const a = attended[p.id] ?? 0
-      const e = expected[p.id] ?? 0
-      const l = late[p.id] ?? 0
+      const r = raw[p.id] ?? { present: 0, late: 0, notAuth: 0, ha: 0, hn: 0 }
+      const attended = r.present + r.late + 0.5 * r.ha + 0.5 * r.hn
+      // A participant's own Phase 3 figures: a half-day approved (HA) still
+      // costs a full day of "expected" here (matches the register's own
+      // per-participant row formula).
+      const expectedRow = r.present + r.late + r.notAuth + r.ha + r.hn
+      const attendancePct = expectedRow > 0 ? Math.round((attended / expectedRow) * 1000) / 10 : 0
+      const punctualityPct = r.present + r.late > 0 ? Math.round((r.present / (r.present + r.late)) * 1000) / 10 : 0
+
+      // Combined Phase 1 + 2 + 3: Phase 1/2 are frozen totals from the old
+      // registers; Phase 3 here weights HA at only half a day of "expected"
+      // (matches the register's own "Overall (P1-P3)" formula exactly).
+      const h = history[p.id]
+      const expectedOverall = r.present + r.late + r.notAuth + 0.5 * r.ha + r.hn
+      const overallAttended = (h?.p1_attended ?? 0) + (h?.p2_attended ?? 0) + attended
+      const overallExpected = (h?.p1_expected ?? 0) + (h?.p2_expected ?? 0) + expectedOverall
+      const overallPresent = (h?.p1_present ?? 0) + (h?.p2_present ?? 0) + r.present
+      const overallPresentLate = (h?.p1_present_late ?? 0) + (h?.p2_present_late ?? 0) + r.present + r.late
+
       computed[p.id] = {
-        attendancePct: e > 0 ? Math.round((a / e) * 1000) / 10 : 0,
-        punctualityPct: a > 0 ? Math.round(((a - l) / a) * 1000) / 10 : 0,
+        attendancePct,
+        punctualityPct,
+        overallAttendancePct: overallExpected > 0 ? Math.round((overallAttended / overallExpected) * 1000) / 10 : 0,
+        overallPunctualityPct: overallPresentLate > 0 ? Math.round((overallPresent / overallPresentLate) * 1000) / 10 : 0,
       }
     }
     setStats(computed)
@@ -218,8 +239,10 @@ export default function ParticipantsPage() {
                 <th className="px-4 py-3">Family</th>
                 <th className="px-4 py-3">Joining Date</th>
                 <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Attendance %</th>
-                <th className="px-4 py-3">Punctuality %</th>
+                <th className="px-4 py-3">Phase 3 Attendance %</th>
+                <th className="px-4 py-3">Phase 3 Punctuality %</th>
+                <th className="px-4 py-3">Overall (P1-P3) Attendance %</th>
+                <th className="px-4 py-3">Overall (P1-P3) Punctuality %</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -278,11 +301,17 @@ export default function ParticipantsPage() {
                   <td className="px-4 py-2 font-medium text-gray-900">
                     {stats[p.id]?.punctualityPct ?? 0}%
                   </td>
+                  <td className="px-4 py-2 font-medium text-gray-900">
+                    {stats[p.id]?.overallAttendancePct ?? 0}%
+                  </td>
+                  <td className="px-4 py-2 font-medium text-gray-900">
+                    {stats[p.id]?.overallPunctualityPct ?? 0}%
+                  </td>
                 </tr>
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+                  <td colSpan={8} className="px-4 py-8 text-center text-gray-400">
                     No participants match.
                   </td>
                 </tr>
@@ -292,7 +321,10 @@ export default function ParticipantsPage() {
         </div>
       )}
       <p className="mt-3 text-xs text-gray-400">
-        Click any cell to edit it directly — changes save automatically.
+        Click any cell to edit it directly — changes save automatically. &quot;Phase 3&quot; columns
+        only count this current phase (from 7 Sept 2026). &quot;Overall (P1-P3)&quot; columns add
+        Phase 1 and Phase 2&apos;s final numbers on top, so they show each participant&apos;s whole
+        time in the programme.
       </p>
     </DashboardShell>
   )

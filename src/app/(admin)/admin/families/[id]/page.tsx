@@ -80,16 +80,18 @@ export default function FamilyAttendancePage() {
     const participantList = participants ?? []
     setOnLeaveCount(participantList.filter((p) => p.status === 'On Leave').length)
 
-    // Build per-participant totals using the register's own formula:
-    //   attended = present(1) + late(1) + HA(0.5) + HN(0.5)
-    //   expected = every marked day except approved absences (A)
-    //   attendance% = attended / expected ; punctuality% = (attended - late) / attended
+    // Raw day counts per participant. Two different formulas are built from
+    // these, matching the register's own two formulas exactly:
+    //   - each participant's own row: a half-day approved (HA) still costs a
+    //     full day in the "expected" total
+    //   - the family-wide totals box: HA only costs half a day there instead
+    // Punctuality never involves half days at all in either place - it's
+    // always just present / (present + late).
     const byParticipant: Record<string, {
-      present: number; late: number; authAbsence: number; notAuth: number
-      attended: number; expected: number
+      present: number; late: number; authAbsence: number; notAuth: number; ha: number; hn: number
     }> = {}
     for (const p of participantList) {
-      byParticipant[p.id] = { present: 0, late: 0, authAbsence: 0, notAuth: 0, attended: 0, expected: 0 }
+      byParticipant[p.id] = { present: 0, late: 0, authAbsence: 0, notAuth: 0, ha: 0, hn: 0 }
     }
     const selectedDayCode: Record<string, string> = {}
 
@@ -99,48 +101,46 @@ export default function FamilyAttendancePage() {
       if (rec.date === date) selectedDayCode[rec.participant_id] = rec.code
 
       switch (rec.code) {
-        case '/':
-          bucket.present++; bucket.attended += 1; bucket.expected += 1; break
-        case 'L':
-          bucket.late++; bucket.attended += 1; bucket.expected += 1; break
-        case 'A':
-          bucket.authAbsence++; break
-        case 'N':
-          bucket.notAuth++; bucket.expected += 1; break
-        case 'HA':
-          bucket.attended += 0.5; bucket.expected += 1; break
-        case 'HN':
-          bucket.attended += 0.5; bucket.expected += 1; break
+        case '/': bucket.present++; break
+        case 'L': bucket.late++; break
+        case 'A': bucket.authAbsence++; break
+        case 'N': bucket.notAuth++; break
+        case 'HA': bucket.ha++; break
+        case 'HN': bucket.hn++; break
       }
     }
 
     const rowsOut: ParticipantRow[] = participantList.map((p) => {
       const b = byParticipant[p.id]
+      const attended = b.present + b.late + 0.5 * b.ha + 0.5 * b.hn
+      const expectedRow = b.present + b.late + b.notAuth + b.ha + b.hn // HA full weight on a participant's own row
       return {
         id: p.id,
         full_name: p.full_name,
         status: p.status,
         selectedDayCode: selectedDayCode[p.id] ?? null,
-        totalPresent: b.attended,
+        totalPresent: attended,
         authAbsence: b.authAbsence,
         notAuth: b.notAuth,
         late: b.late,
-        attendancePct: b.expected > 0 ? Math.round((b.attended / b.expected) * 1000) / 10 : 0,
-        punctualityPct: b.attended > 0 ? Math.round(((b.attended - b.late) / b.attended) * 1000) / 10 : 0,
+        attendancePct: expectedRow > 0 ? Math.round((attended / expectedRow) * 1000) / 10 : 0,
+        punctualityPct: b.present + b.late > 0 ? Math.round((b.present / (b.present + b.late)) * 1000) / 10 : 0,
       }
     })
     setRows(rowsOut)
 
     // Family-wide term totals: add up attended/expected across all participants
-    let sumAttended = 0, sumExpected = 0, sumLate = 0
+    // (HA only costs half a day here, matching the family box's own formula)
+    let sumAttended = 0, sumExpectedAgg = 0, sumPresent = 0, sumPresentLate = 0
     for (const b of Object.values(byParticipant)) {
-      sumAttended += b.attended
-      sumExpected += b.expected
-      sumLate += b.late
+      sumAttended += b.present + b.late + 0.5 * b.ha + 0.5 * b.hn
+      sumExpectedAgg += b.present + b.late + b.notAuth + 0.5 * b.ha + b.hn
+      sumPresent += b.present
+      sumPresentLate += b.present + b.late
     }
     setTermTotals({
-      attendancePct: sumExpected > 0 ? Math.round((sumAttended / sumExpected) * 1000) / 10 : 0,
-      punctualityPct: sumAttended > 0 ? Math.round(((sumAttended - sumLate) / sumAttended) * 1000) / 10 : 0,
+      attendancePct: sumExpectedAgg > 0 ? Math.round((sumAttended / sumExpectedAgg) * 1000) / 10 : 0,
+      punctualityPct: sumPresentLate > 0 ? Math.round((sumPresent / sumPresentLate) * 1000) / 10 : 0,
     })
 
     // Selected-day totals for this family
