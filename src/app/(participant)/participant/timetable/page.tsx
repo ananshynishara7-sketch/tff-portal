@@ -148,11 +148,16 @@ export default function ParticipantTimetablePage() {
                       </span>
                       <div>
                         <p className="font-medium">{s.title}</p>
-                        <p className="text-xs opacity-80">
-                          {s.group_name ?? 'Everyone'}
-                          {s.facilitator_name ? ` · ${s.facilitator_name}` : ''}
-                          {s.co_facilitator_name ? ` + ${s.co_facilitator_name}` : ''}
-                        </p>
+                        {(() => {
+                          const parts = [
+                            s.group_name,
+                            s.facilitator_name,
+                            s.co_facilitator_name ? `+ ${s.co_facilitator_name}` : null,
+                          ].filter(Boolean)
+                          return parts.length > 0 ? (
+                            <p className="text-xs opacity-80">{parts.join(' · ')}</p>
+                          ) : null
+                        })()}
                       </div>
                     </div>
                   )
