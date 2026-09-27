@@ -24,6 +24,7 @@ const FACILITATORS = [
 ]
 
 type TimetableGroup = { id: string; name: string; color: string; sort_order: number }
+type TimetableLocation = { id: string; name: string; color: string; sort_order: number }
 
 type SessionRow = {
   id: string
@@ -35,6 +36,7 @@ type SessionRow = {
   facilitator_name: string | null
   co_facilitator_name: string | null
   color: string | null
+  location_name: string | null
 }
 
 const todayISO = () => new Date().toISOString().slice(0, 10)
@@ -91,6 +93,9 @@ export default function AdminTimetablePage() {
   const [showColours, setShowColours] = useState(false)
   const [newGroupName, setNewGroupName] = useState('')
   const [newGroupColor, setNewGroupColor] = useState('#f59e0b')
+  const [locations, setLocations] = useState<TimetableLocation[]>([])
+  const [newLocationName, setNewLocationName] = useState('')
+  const [newLocationColor, setNewLocationColor] = useState('#0891b2')
   const [now, setNow] = useState(() => new Date())
 
   useEffect(() => {
@@ -109,21 +114,26 @@ export default function AdminTimetablePage() {
     facilitator_name: '',
     co_facilitator_name: '',
     color: '',
+    location_name: '',
   }
   const [form, setForm] = useState(emptyForm)
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [{ data: sessionData }, { data: groupData }] = await Promise.all([
+    const [{ data: sessionData }, { data: groupData }, { data: locationData }] = await Promise.all([
       supabase
         .from('sessions')
-        .select('id, title, date, start_time, end_time, group_name, facilitator_name, co_facilitator_name, color')
+        .select(
+          'id, title, date, start_time, end_time, group_name, facilitator_name, co_facilitator_name, color, location_name'
+        )
         .order('date')
         .order('start_time'),
       supabase.from('timetable_groups').select('id, name, color, sort_order').order('sort_order'),
+      supabase.from('timetable_locations').select('id, name, color, sort_order').order('sort_order'),
     ])
     setAllSessions(sessionData ?? [])
     setGroups(groupData ?? [])
+    setLocations(locationData ?? [])
     setLoading(false)
   }, [supabase])
 
@@ -153,6 +163,7 @@ export default function AdminTimetablePage() {
       facilitator_name: row.facilitator_name ?? '',
       co_facilitator_name: row.co_facilitator_name ?? '',
       color: row.color ?? '',
+      location_name: row.location_name ?? '',
     })
     setError(null)
   }
@@ -184,6 +195,7 @@ export default function AdminTimetablePage() {
       facilitator_name: form.facilitator_name || null,
       co_facilitator_name: form.co_facilitator_name || null,
       color: form.color || null,
+      location_name: form.location_name || null,
     }
 
     if (editingId === 'new') {
@@ -234,6 +246,39 @@ export default function AdminTimetablePage() {
     )
       return
     await supabase.from('timetable_groups').delete().eq('id', id)
+    load()
+  }
+
+  async function updateLocationColor(id: string, color: string) {
+    setLocations((prev) => prev.map((l) => (l.id === id ? { ...l, color } : l)))
+    await supabase.from('timetable_locations').update({ color }).eq('id', id)
+  }
+
+  async function renameLocation(id: string, name: string) {
+    if (!name.trim()) return
+    setLocations((prev) => prev.map((l) => (l.id === id ? { ...l, name: name.trim() } : l)))
+    await supabase.from('timetable_locations').update({ name: name.trim() }).eq('id', id)
+  }
+
+  async function addLocation(e: React.FormEvent) {
+    e.preventDefault()
+    if (!newLocationName.trim()) return
+    await supabase
+      .from('timetable_locations')
+      .insert({ name: newLocationName.trim(), color: newLocationColor, sort_order: locations.length })
+    setNewLocationName('')
+    setNewLocationColor('#0891b2')
+    load()
+  }
+
+  async function deleteLocation(id: string, name: string) {
+    if (
+      !confirm(
+        `Remove "${name}" from the location list? Sessions already using it will keep the name, it just won't be pickable from the dropdown any more.`
+      )
+    )
+      return
+    await supabase.from('timetable_locations').delete().eq('id', id)
     load()
   }
 
@@ -357,6 +402,21 @@ export default function AdminTimetablePage() {
                   Use group&apos;s colour
                 </button>
               </div>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Location</label>
+              <select
+                value={form.location_name}
+                onChange={(e) => setForm((f) => ({ ...f, location_name: e.target.value }))}
+                className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#022269] focus:outline-none sm:w-56"
+              >
+                <option value="">Not set</option>
+                {locations.map((l) => (
+                  <option key={l.id} value={l.name}>
+                    {l.name}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Facilitator</label>
@@ -506,6 +566,68 @@ export default function AdminTimetablePage() {
               {g.name}
             </span>
           ))}
+          <span className="ml-3">Locations:</span>
+          {locations.map((l) => (
+            <span key={l.id} className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: l.color }} />
+              {l.name}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {showColours && (
+        <div className="mb-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h2 className="mb-4 text-base font-semibold text-gray-900">Location colours</h2>
+          <div className="space-y-3">
+            {locations.map((l) => (
+              <div key={l.id} className="flex flex-wrap items-center gap-3">
+                <input
+                  type="color"
+                  value={l.color}
+                  onChange={(e) => updateLocationColor(l.id, e.target.value)}
+                  className="h-9 w-9 cursor-pointer rounded border border-gray-300"
+                />
+                <input
+                  type="text"
+                  defaultValue={l.name}
+                  onBlur={(e) => renameLocation(l.id, e.target.value)}
+                  className="w-48 rounded-md border border-gray-300 px-2 py-1 text-sm"
+                />
+                <span className="rounded-full border px-2 py-1 text-xs font-medium" style={colorStyle(l.color)}>
+                  Preview
+                </span>
+                <button
+                  onClick={() => deleteLocation(l.id, l.name)}
+                  className="text-xs font-medium text-red-600 hover:underline"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <form onSubmit={addLocation} className="mt-4 flex flex-wrap items-center gap-3 border-t border-gray-100 pt-4">
+            <input
+              type="color"
+              value={newLocationColor}
+              onChange={(e) => setNewLocationColor(e.target.value)}
+              className="h-9 w-9 cursor-pointer rounded border border-gray-300"
+            />
+            <input
+              type="text"
+              value={newLocationName}
+              onChange={(e) => setNewLocationName(e.target.value)}
+              placeholder="New location name"
+              className="w-48 rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+            />
+            <button
+              type="submit"
+              className="rounded-md bg-[#022269] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
+            >
+              + Add Location
+            </button>
+          </form>
         </div>
       )}
 
@@ -614,6 +736,7 @@ export default function AdminTimetablePage() {
                           {(() => {
                             const parts = [
                               s.group_name,
+                              s.location_name,
                               s.facilitator_name,
                               s.co_facilitator_name ? `+ ${s.co_facilitator_name}` : null,
                             ].filter(Boolean)

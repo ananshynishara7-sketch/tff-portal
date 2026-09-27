@@ -22,6 +22,7 @@ type SessionRow = {
   start_time: string
   end_time: string
   group_name: string | null
+  location_name: string | null
   facilitator_name: string | null
   co_facilitator_name: string | null
   color: string | null
@@ -91,7 +92,9 @@ export default function ParticipantTimetablePage() {
     const [{ data }, { data: groupData }] = await Promise.all([
       supabase
         .from('sessions')
-        .select('id, title, date, start_time, end_time, group_name, facilitator_name, co_facilitator_name, color')
+        .select(
+          'id, title, date, start_time, end_time, group_name, facilitator_name, co_facilitator_name, color, location_name'
+        )
         .gte('date', todayISO())
         .order('date')
         .order('start_time'),
@@ -187,6 +190,7 @@ export default function ParticipantTimetablePage() {
                         {(() => {
                           const parts = [
                             s.group_name,
+                            s.location_name,
                             s.facilitator_name,
                             s.co_facilitator_name ? `+ ${s.co_facilitator_name}` : null,
                           ].filter(Boolean)
