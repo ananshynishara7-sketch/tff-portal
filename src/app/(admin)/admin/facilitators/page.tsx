@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import DashboardShell from '@/components/DashboardShell'
 import WeeklyBlockedTime from '@/components/WeeklyBlockedTime'
+import TodoList from '@/components/TodoList'
 import { createClient } from '@/lib/supabase/client'
 
 const navItems = [
@@ -697,6 +698,21 @@ export default function FacilitatorsPage() {
                   <p className="text-sm text-gray-400">
                     {selected.full_name} doesn&apos;t have a login yet, so they haven&apos;t filled in a
                     weekly plan.
+                  </p>
+                )}
+              </div>
+
+              {/* To-Do List - read only, filled in by the facilitator themselves once logged in */}
+              <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                <h2 className="mb-4 text-base font-semibold text-gray-900">
+                  {selected.full_name}&apos;s To-Do List
+                </h2>
+                {selected.profile_id ? (
+                  <TodoList facilitatorId={selected.profile_id} readOnly />
+                ) : (
+                  <p className="text-sm text-gray-400">
+                    {selected.full_name} doesn&apos;t have a login yet, so they haven&apos;t started a to-do
+                    list.
                   </p>
                 )}
               </div>

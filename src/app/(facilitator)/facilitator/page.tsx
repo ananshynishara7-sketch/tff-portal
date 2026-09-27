@@ -6,6 +6,7 @@ const navItems = [
   { label: 'Attendance', href: '/facilitator/attendance' },
   { label: 'My Schedule', href: '/facilitator/schedule' },
   { label: 'My Blocked Time', href: '/facilitator/blocked-time' },
+  { label: 'My To-Do List', href: '/facilitator/todo' },
   { label: 'Announcements', href: '/facilitator/announcements' },
   { label: 'Progress Notes', href: '/facilitator/progress' },
 ]

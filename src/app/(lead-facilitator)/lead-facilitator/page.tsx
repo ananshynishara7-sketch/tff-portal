@@ -7,6 +7,7 @@ const navItems = [
   { label: 'Attendance', href: '/lead-facilitator/attendance' },
   { label: 'Masterplan Phase 3', href: '/lead-facilitator/timetable' },
   { label: 'My Blocked Time', href: '/lead-facilitator/blocked-time' },
+  { label: 'My To-Do List', href: '/lead-facilitator/todo' },
   { label: 'Announcements', href: '/lead-facilitator/announcements' },
   { label: 'Progress Tracking', href: '/lead-facilitator/progress' },
 ]
