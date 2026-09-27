@@ -23,6 +23,18 @@ const DAYS = [
 
 const DEFAULT_COLOR = '#9ca3af'
 
+// Small inline icons (no icon library dependency), same ones used on the
+// To-Do List, so Edit/Delete look the same everywhere.
+function Icon({ path, className = 'h-3.5 w-3.5' }: { path: string; className?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6} className={className}>
+      <path d={path} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+const PENCIL_ICON = 'M13 4.5 15.5 7 7 15.5 4 16.5 5 13.5 13 4.5Z'
+const TRASH_ICON = 'M4.5 6h11M8.5 6V4.5h3V6M7 6v9.5a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1V6M9 9v4M11 9v4'
+
 // The standard daily schedule, same for every facilitator and every day -
 // matches the Masterplan's common "Focus Time" / "Lunch Break" blocks.
 // Whenever a day has nothing in it yet, this is filled in automatically so
@@ -474,18 +486,12 @@ export default function WeeklyBlockedTime({
                     )}
                     <span className="flex-1 truncate text-gray-700">{s.task}</span>
                     {!readOnly && (
-                      <span className="flex shrink-0 gap-1.5">
-                        <button
-                          onClick={() => startEdit(s)}
-                          className="text-[10px] font-medium underline opacity-80 hover:opacity-100"
-                        >
-                          Edit
+                      <span className="flex shrink-0 gap-0.5">
+                        <button onClick={() => startEdit(s)} title="Edit" className="rounded p-1 text-gray-400 hover:bg-white hover:text-[#022269]">
+                          <Icon path={PENCIL_ICON} className="h-3 w-3" />
                         </button>
-                        <button
-                          onClick={() => deleteSlot(s.id)}
-                          className="text-[10px] font-medium underline opacity-80 hover:opacity-100"
-                        >
-                          Delete
+                        <button onClick={() => deleteSlot(s.id)} title="Delete" className="rounded p-1 text-gray-400 hover:bg-white hover:text-red-600">
+                          <Icon path={TRASH_ICON} className="h-3 w-3" />
                         </button>
                       </span>
                     )}
