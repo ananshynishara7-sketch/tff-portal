@@ -8,6 +8,7 @@ type TodoRow = {
   category: string | null
   task: string
   assigned_by: string | null
+  assigned_to: string | null
   due_date: string | null
   recurring: boolean
   frequency: string | null
@@ -20,18 +21,38 @@ type TodoRow = {
   created_at: string
 }
 
-const STATUSES = ['To Do', 'In Progress', 'Done', 'Cancelled']
+type StatusRow = { id: string; name: string; color: string; sort_order: number }
+
+// Straight from Nishara's own to-do spreadsheet.
+const CATEGORIES = [
+  'Curriculum', 'Events', 'Facilitator Training', 'Flag Carriers',
+  'Language & Leadership', 'Merchandise', 'Office Manager', 'Participants',
+  'Public Relations', 'Recruitment of Participants', 'Safeguarding',
+]
+const FREQUENCIES = ['Weekly', 'Biweekly', 'Monthly']
+// Same people list used for Assigned To - reused for Assigned By and
+// Accountability Partner too, plus "Admin" since that's a common assigner
+// in the spreadsheet.
+const PEOPLE = [
+  'Admin', 'Jeyastan', 'Nishara', 'Gajan', 'Jenny', 'Rageethan',
+  'Thuvarahan', 'Dakshika', 'Jericksha', 'Suganya',
+]
+const ASSIGNEES = PEOPLE.filter((p) => p !== 'Admin')
+
 const URGENCIES = ['Urgent', 'Not Urgent']
 const IMPORTANCES = ['Important', 'Not Important']
 
-const FILTERS = ['Active', 'To Do', 'In Progress', 'Done', 'Cancelled', 'All'] as const
-type Filter = (typeof FILTERS)[number]
+const DEFAULT_COLOR = '#9ca3af'
 
-const statusStyle: Record<string, string> = {
-  'To Do': 'border-gray-300 bg-gray-100 text-gray-600',
-  'In Progress': 'border-blue-200 bg-blue-50 text-blue-700',
-  Done: 'border-green-200 bg-green-50 text-green-700',
-  Cancelled: 'border-gray-200 bg-gray-50 text-gray-400 line-through',
+// Turns a picked hex colour into a light-background / coloured-border /
+// coloured-text card style, same trick used for Blocked Time and the
+// Masterplan.
+function colorStyle(hex: string) {
+  return {
+    backgroundColor: `${hex}1A`,
+    borderColor: hex,
+    color: hex,
+  }
 }
 
 // The Eisenhower quadrant, same as the reference spreadsheet's "Quadrant"
@@ -76,17 +97,22 @@ export default function TodoList({
   const supabase = createClient()
   const [ownId, setOwnId] = useState<string | null>(null)
   const [todos, setTodos] = useState<TodoRow[]>([])
+  const [statuses, setStatuses] = useState<StatusRow[]>([])
   const [loading, setLoading] = useState(true)
   const [noProfile, setNoProfile] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [filter, setFilter] = useState<Filter>('Active')
+  const [filter, setFilter] = useState('Active')
+  const [showColours, setShowColours] = useState(false)
+  const [newStatusName, setNewStatusName] = useState('')
+  const [newStatusColor, setNewStatusColor] = useState('#6b7280')
 
   const [formTarget, setFormTarget] = useState<string | 'new' | null>(null)
   const emptyForm = {
     category: '',
     task: '',
     assigned_by: '',
+    assigned_to: '',
     due_date: '',
     recurring: false,
     frequency: '',
@@ -99,6 +125,9 @@ export default function TodoList({
   const [form, setForm] = useState(emptyForm)
 
   const targetId = facilitatorId ?? ownId
+  const colorByStatus: Record<string, string> = Object.fromEntries(statuses.map((s) => [s.name, s.color]))
+  const statusNames = statuses.map((s) => s.name)
+  const FILTERS = ['Active', ...statusNames, 'All']
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -114,30 +143,29 @@ export default function TodoList({
       setOwnId(id)
     }
 
-    const { data } = await supabase
-      .from('facilitator_todos')
-      .select(
-        'id, category, task, assigned_by, due_date, recurring, frequency, urgency, importance, status, accountability_partner, resources_needed, completed_at, created_at'
-      )
-      .eq('facilitator_id', id)
-      .order('due_date', { ascending: true, nullsFirst: false })
-      .order('created_at')
+    const [{ data }, { data: statusData }] = await Promise.all([
+      supabase
+        .from('facilitator_todos')
+        .select(
+          'id, category, task, assigned_by, assigned_to, due_date, recurring, frequency, urgency, importance, status, accountability_partner, resources_needed, completed_at, created_at'
+        )
+        .eq('facilitator_id', id)
+        .order('due_date', { ascending: true, nullsFirst: false })
+        .order('created_at'),
+      supabase.from('todo_statuses').select('id, name, color, sort_order').order('sort_order'),
+    ])
 
     if (!data) {
       setNoProfile(true)
     }
     setTodos(data ?? [])
+    setStatuses(statusData ?? [])
     setLoading(false)
   }, [facilitatorId, supabase])
 
   useEffect(() => {
     load()
   }, [load])
-
-  const categorySuggestions = useMemo(
-    () => Array.from(new Set(todos.map((t) => t.category).filter((c): c is string => !!c))),
-    [todos]
-  )
 
   const stats = useMemo(() => {
     const total = todos.length
@@ -167,13 +195,13 @@ export default function TodoList({
 
   const visibleTodos = useMemo(() => {
     if (filter === 'All') return todos
-    if (filter === 'Active') return todos.filter((t) => t.status === 'To Do' || t.status === 'In Progress')
+    if (filter === 'Active') return todos.filter((t) => t.status !== 'Done' && t.status !== 'Cancelled')
     return todos.filter((t) => t.status === filter)
   }, [todos, filter])
 
   function startAdd() {
     setFormTarget('new')
-    setForm(emptyForm)
+    setForm({ ...emptyForm, status: statusNames[0] ?? 'To Do' })
     setError(null)
   }
 
@@ -183,6 +211,7 @@ export default function TodoList({
       category: t.category ?? '',
       task: t.task,
       assigned_by: t.assigned_by ?? '',
+      assigned_to: t.assigned_to ?? '',
       due_date: t.due_date ?? '',
       recurring: t.recurring,
       frequency: t.frequency ?? '',
@@ -214,16 +243,17 @@ export default function TodoList({
     const completed_at = nowDone && !wasDone ? new Date().toISOString() : nowDone ? undefined : null
 
     const payload: Record<string, unknown> = {
-      category: form.category.trim() || null,
+      category: form.category || null,
       task: form.task.trim(),
-      assigned_by: form.assigned_by.trim() || null,
+      assigned_by: form.assigned_by || null,
+      assigned_to: form.assigned_to || null,
       due_date: form.due_date || null,
       recurring: form.recurring,
-      frequency: form.recurring ? form.frequency.trim() || null : null,
+      frequency: form.recurring ? form.frequency || null : null,
       urgency: form.urgency || null,
       importance: form.importance || null,
       status: form.status,
-      accountability_partner: form.accountability_partner.trim() || null,
+      accountability_partner: form.accountability_partner || null,
       resources_needed: form.resources_needed.trim() || null,
     }
     if (completed_at !== undefined) payload.completed_at = completed_at
@@ -259,25 +289,50 @@ export default function TodoList({
     await supabase.from('facilitator_todos').update({ status, completed_at, updated_at: new Date().toISOString() }).eq('id', t.id)
   }
 
+  async function updateStatusColor(id: string, color: string) {
+    setStatuses((prev) => prev.map((s) => (s.id === id ? { ...s, color } : s)))
+    await supabase.from('todo_statuses').update({ color }).eq('id', id)
+  }
+
+  async function renameStatus(id: string, name: string) {
+    if (!name.trim()) return
+    setStatuses((prev) => prev.map((s) => (s.id === id ? { ...s, name: name.trim() } : s)))
+    await supabase.from('todo_statuses').update({ name: name.trim() }).eq('id', id)
+  }
+
+  async function addStatus(e: React.FormEvent) {
+    e.preventDefault()
+    if (!newStatusName.trim()) return
+    await supabase.from('todo_statuses').insert({ name: newStatusName.trim(), color: newStatusColor, sort_order: statuses.length })
+    setNewStatusName('')
+    setNewStatusColor('#6b7280')
+    load()
+  }
+
+  async function deleteStatus(id: string, name: string) {
+    if (!confirm(`Remove "${name}" from the status list? Tasks using it will just show grey until you pick a new status.`)) return
+    await supabase.from('todo_statuses').delete().eq('id', id)
+    load()
+  }
+
   function renderForm() {
     return (
       <form onSubmit={saveForm} className="mb-4 space-y-3 rounded-xl border border-[#022269] bg-white p-4 shadow-sm">
         <div className="flex flex-wrap gap-3">
           <div className="w-56">
             <label className="mb-1 block text-xs font-medium text-gray-500">Category</label>
-            <input
-              type="text"
-              list="todo-categories"
+            <select
               value={form.category}
               onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
-              placeholder="e.g. Participants"
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#022269] focus:outline-none"
-            />
-            <datalist id="todo-categories">
-              {categorySuggestions.map((c) => (
-                <option key={c} value={c} />
+            >
+              <option value="">—</option>
+              {CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
               ))}
-            </datalist>
+            </select>
           </div>
           <div className="flex-1 min-w-[220px]">
             <label className="mb-1 block text-xs font-medium text-gray-500">Task</label>
@@ -292,14 +347,35 @@ export default function TodoList({
         </div>
 
         <div className="flex flex-wrap gap-3">
-          <div className="w-48">
+          <div className="w-44">
             <label className="mb-1 block text-xs font-medium text-gray-500">Assigned by</label>
-            <input
-              type="text"
+            <select
               value={form.assigned_by}
               onChange={(e) => setForm((f) => ({ ...f, assigned_by: e.target.value }))}
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#022269] focus:outline-none"
-            />
+            >
+              <option value="">—</option>
+              {PEOPLE.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="w-44">
+            <label className="mb-1 block text-xs font-medium text-gray-500">Assigned to</label>
+            <select
+              value={form.assigned_to}
+              onChange={(e) => setForm((f) => ({ ...f, assigned_to: e.target.value }))}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#022269] focus:outline-none"
+            >
+              <option value="">—</option>
+              {ASSIGNEES.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-500">Due date</label>
@@ -317,9 +393,9 @@ export default function TodoList({
               onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
               className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#022269] focus:outline-none"
             >
-              {STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
+              {statuses.map((s) => (
+                <option key={s.id} value={s.name}>
+                  {s.name}
                 </option>
               ))}
             </select>
@@ -368,13 +444,18 @@ export default function TodoList({
           {form.recurring && (
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-500">Frequency</label>
-              <input
-                type="text"
+              <select
                 value={form.frequency}
                 onChange={(e) => setForm((f) => ({ ...f, frequency: e.target.value }))}
-                placeholder="e.g. Weekly"
                 className="w-32 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#022269] focus:outline-none"
-              />
+              >
+                <option value="">—</option>
+                {FREQUENCIES.map((f) => (
+                  <option key={f} value={f}>
+                    {f}
+                  </option>
+                ))}
+              </select>
             </div>
           )}
         </div>
@@ -382,12 +463,18 @@ export default function TodoList({
         <div className="flex flex-wrap gap-3">
           <div className="w-56">
             <label className="mb-1 block text-xs font-medium text-gray-500">Accountability partner</label>
-            <input
-              type="text"
+            <select
               value={form.accountability_partner}
               onChange={(e) => setForm((f) => ({ ...f, accountability_partner: e.target.value }))}
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#022269] focus:outline-none"
-            />
+            >
+              <option value="">—</option>
+              {PEOPLE.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="flex-1 min-w-[220px]">
             <label className="mb-1 block text-xs font-medium text-gray-500">Resources needed</label>
@@ -453,6 +540,65 @@ export default function TodoList({
         />
       </div>
 
+      {!readOnly && (
+        <div className="mb-4 flex justify-end">
+          <button
+            onClick={() => setShowColours((v) => !v)}
+            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            {showColours ? 'Hide Colours' : 'Edit Colours'}
+          </button>
+        </div>
+      )}
+
+      {showColours && !readOnly && (
+        <div className="mb-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h2 className="mb-4 text-base font-semibold text-gray-900">Status colours</h2>
+          <div className="space-y-3">
+            {statuses.map((s) => (
+              <div key={s.id} className="flex flex-wrap items-center gap-3">
+                <input
+                  type="color"
+                  value={s.color}
+                  onChange={(e) => updateStatusColor(s.id, e.target.value)}
+                  className="h-9 w-9 cursor-pointer rounded border border-gray-300"
+                />
+                <input
+                  type="text"
+                  defaultValue={s.name}
+                  onBlur={(e) => renameStatus(s.id, e.target.value)}
+                  className="w-40 rounded-md border border-gray-300 px-2 py-1 text-sm"
+                />
+                <span className="rounded-full border px-2 py-1 text-xs font-medium" style={colorStyle(s.color)}>
+                  Preview
+                </span>
+                <button onClick={() => deleteStatus(s.id, s.name)} className="text-xs font-medium text-red-600 hover:underline">
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+          <form onSubmit={addStatus} className="mt-4 flex flex-wrap items-center gap-3 border-t border-gray-100 pt-4">
+            <input
+              type="color"
+              value={newStatusColor}
+              onChange={(e) => setNewStatusColor(e.target.value)}
+              className="h-9 w-9 cursor-pointer rounded border border-gray-300"
+            />
+            <input
+              type="text"
+              value={newStatusName}
+              onChange={(e) => setNewStatusName(e.target.value)}
+              placeholder="New status name"
+              className="w-40 rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+            />
+            <button type="submit" className="rounded-md bg-[#022269] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90">
+              + Add Status
+            </button>
+          </form>
+        </div>
+      )}
+
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-1.5">
           {FILTERS.map((f) => (
@@ -493,28 +639,29 @@ export default function TodoList({
             const q = quadrant(t.urgency, t.importance)
             const dl = t.due_date ? daysLeft(t.due_date) : null
             const overdue = dl != null && dl < 0 && t.status !== 'Done' && t.status !== 'Cancelled'
+            const hex = colorByStatus[t.status] ?? DEFAULT_COLOR
 
             const meta = [
               t.due_date && `Due ${t.due_date}${dl != null ? ` (${overdue ? `${Math.abs(dl)}d overdue` : dl === 0 ? 'today' : `${dl}d left`})` : ''}`,
+              t.assigned_to && `Assigned to ${t.assigned_to}`,
               t.assigned_by && `Assigned by ${t.assigned_by}`,
               t.recurring && `Recurring${t.frequency ? ` · ${t.frequency}` : ''}`,
               t.accountability_partner && `Accountability: ${t.accountability_partner}`,
               t.resources_needed && `Needs: ${t.resources_needed}`,
             ].filter(Boolean)
 
+            // The whole card takes on the status colour, same idea as
+            // Blocked Time's priority-coloured cards.
             return (
-              <div
-                key={t.id}
-                className={`rounded-lg border bg-white p-3 shadow-sm ${overdue ? 'border-red-300' : 'border-gray-200'}`}
-              >
+              <div key={t.id} className="rounded-lg border p-3 shadow-sm" style={colorStyle(hex)}>
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-2">
                     {t.category && (
-                      <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-500">
+                      <span className="rounded-full border border-current/30 bg-white/50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide">
                         {t.category}
                       </span>
                     )}
-                    <span className={`text-sm font-medium ${t.status === 'Cancelled' ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+                    <span className={`text-sm font-medium text-gray-900 ${t.status === 'Cancelled' ? 'line-through opacity-60' : ''}`}>
                       {t.task}
                     </span>
                   </div>
@@ -528,33 +675,35 @@ export default function TodoList({
                       </span>
                     )}
                     {readOnly ? (
-                      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${statusStyle[t.status] ?? ''}`}>
+                      <span
+                        className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white"
+                        style={{ backgroundColor: hex }}
+                      >
                         {t.status}
                       </span>
                     ) : (
                       <select
                         value={t.status}
                         onChange={(e) => quickSetStatus(t, e.target.value)}
-                        className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${statusStyle[t.status] ?? ''}`}
+                        className="rounded-full border-0 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white"
+                        style={{ backgroundColor: hex }}
                       >
-                        {STATUSES.map((s) => (
-                          <option key={s} value={s}>
-                            {s}
+                        {statuses.map((s) => (
+                          <option key={s.id} value={s.name} className="bg-white text-gray-900 normal-case">
+                            {s.name}
                           </option>
                         ))}
                       </select>
                     )}
                   </div>
                 </div>
-                {meta.length > 0 && (
-                  <p className={`mt-1 text-xs ${overdue ? 'font-medium text-red-600' : 'text-gray-500'}`}>{meta.join(' · ')}</p>
-                )}
+                {meta.length > 0 && <p className="mt-1 text-xs text-gray-600">{meta.join(' · ')}</p>}
                 {!readOnly && (
                   <div className="mt-2 flex gap-3">
-                    <button onClick={() => startEdit(t)} className="text-xs font-medium underline text-gray-500 hover:text-gray-800">
+                    <button onClick={() => startEdit(t)} className="text-xs font-medium underline opacity-80 hover:opacity-100">
                       Edit
                     </button>
-                    <button onClick={() => deleteTodo(t.id)} className="text-xs font-medium underline text-gray-500 hover:text-red-600">
+                    <button onClick={() => deleteTodo(t.id)} className="text-xs font-medium underline opacity-80 hover:opacity-100">
                       Delete
                     </button>
                   </div>
