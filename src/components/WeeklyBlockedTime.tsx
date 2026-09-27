@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 type SlotRow = {
@@ -22,6 +22,20 @@ const DAYS = [
 ]
 
 const DEFAULT_COLOR = '#9ca3af'
+
+// The standard daily schedule, same for every facilitator and every day -
+// matches the Masterplan's common "Focus Time" / "Lunch Break" blocks.
+// Whenever a day has nothing in it yet, this is filled in automatically so
+// there's always a starting template - every field is still fully editable
+// or deletable afterwards.
+const DEFAULT_TIMES = [
+  '08:30', '08:45', '09:00', '09:40', '10:20', '10:40', '11:20', '12:00',
+  '13:00', '13:40', '14:20', '15:00', '15:20', '15:30', '16:00',
+]
+const LUNCH_TIME = '12:00'
+function defaultTaskFor(time: string) {
+  return time === LUNCH_TIME ? 'Lunch Break' : 'Focus Time'
+}
 
 // Turns a picked hex colour into a light-background / coloured-border /
 // coloured-text card style, same trick the Masterplan uses for its groups.
@@ -64,6 +78,9 @@ export default function WeeklyBlockedTime({
   const [form, setForm] = useState(emptyForm)
 
   const targetId = facilitatorId ?? ownId
+  // Only try filling in the default template once per visit, so a failed
+  // insert (or someone deliberately clearing a day) doesn't keep retrying.
+  const seededRef = useRef(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -91,11 +108,38 @@ export default function WeeklyBlockedTime({
 
     if (!slotData) {
       setNoProfile(true)
+      setPriorities(priorityData ?? [])
+      setLoading(false)
+      return
     }
-    setSlots(slotData ?? [])
+
+    // Fill in the standard 15-slot template for any weekday that's
+    // completely empty, so there's always a starting point to edit rather
+    // than a blank column. Only on your own plan, and only once per visit.
+    if (!readOnly && !seededRef.current) {
+      seededRef.current = true
+      const filledDays = new Set(slotData.map((s) => s.day_of_week))
+      const missingDays = DAYS.map((d) => d.num).filter((n) => !filledDays.has(n))
+      if (missingDays.length > 0) {
+        const rows = missingDays.flatMap((day) =>
+          DEFAULT_TIMES.map((time) => ({
+            facilitator_id: id,
+            day_of_week: day,
+            start_time: time,
+            priority: null,
+            task: defaultTaskFor(time),
+          }))
+        )
+        const { data: inserted } = await supabase.from('weekly_blocked_time').insert(rows).select()
+        if (inserted) slotData.push(...inserted)
+        slotData.sort((a, b) => a.day_of_week - b.day_of_week || a.start_time.localeCompare(b.start_time))
+      }
+    }
+
+    setSlots(slotData)
     setPriorities(priorityData ?? [])
     setLoading(false)
-  }, [facilitatorId, supabase])
+  }, [facilitatorId, readOnly, supabase])
 
   useEffect(() => {
     load()
