@@ -19,42 +19,56 @@ export default function LoginPage() {
     setError(null)
     setLoading(true)
 
-    const { data, error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+    // Everything below can fail (a slow/dropped network call, a stale page
+    // after a new deploy, etc). Before this was wrapped, a failure here left
+    // the button stuck on "Signing in..." forever with no feedback - this
+    // makes sure the button always resets and something is always shown.
+    try {
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
 
-    if (signInError) {
-      setError('Wrong email or password. Please try again.')
+      if (signInError) {
+        setError('Wrong email or password. Please try again.')
+        return
+      }
+
+      // Look up the person's role, then send them to the right dashboard.
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', data.user.id)
+        .single()
+
+      if (profileError) {
+        setError(
+          "Signed in, but couldn't load your account details. Please refresh this page and try again."
+        )
+        return
+      }
+
+      switch (profile?.role) {
+        case 'admin':
+          router.push('/admin')
+          break
+        case 'lead_facilitator':
+          router.push('/lead-facilitator')
+          break
+        case 'facilitator':
+        case 'facilitator_support':
+          router.push('/facilitator')
+          break
+        case 'participant':
+          router.push('/participant')
+          break
+        default:
+          router.push('/')
+      }
+    } catch {
+      setError('Something went wrong. Please refresh this page and try again.')
+    } finally {
       setLoading(false)
-      return
-    }
-
-    // Look up the person's role, then send them to the right dashboard.
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', data.user.id)
-      .single()
-
-    setLoading(false)
-
-    switch (profile?.role) {
-      case 'admin':
-        router.push('/admin')
-        break
-      case 'lead_facilitator':
-        router.push('/lead-facilitator')
-        break
-      case 'facilitator':
-      case 'facilitator_support':
-        router.push('/facilitator')
-        break
-      case 'participant':
-        router.push('/participant')
-        break
-      default:
-        router.push('/')
     }
   }
 
