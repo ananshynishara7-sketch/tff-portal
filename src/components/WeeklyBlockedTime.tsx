@@ -391,7 +391,9 @@ export default function WeeklyBlockedTime({
         {DAYS.map((day) => (
           <div key={day.num} className="w-72 shrink-0 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
             <h3 className="mb-3 text-sm font-semibold text-gray-900">{day.label}</h3>
-            <div className="space-y-2">
+            {/* Capped height with its own scroll, so 15 slots a day don't
+                push the whole page into one long scroll. */}
+            <div className="max-h-[65vh] space-y-1.5 overflow-y-auto pr-1">
               {byDay[day.num].length === 0 && formTarget !== 'new' && (
                 <p className="text-xs text-gray-400">Nothing planned.</p>
               )}
@@ -401,34 +403,33 @@ export default function WeeklyBlockedTime({
                 }
                 const hex = s.priority ? colorByName[s.priority] ?? DEFAULT_COLOR : DEFAULT_COLOR
                 return (
-                  <div key={s.id} className="rounded-lg border p-3" style={colorStyle(hex)}>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-semibold">{s.start_time.slice(0, 5)}</span>
-                      {s.priority && (
-                        <span
-                          className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white"
-                          style={{ backgroundColor: hex }}
-                        >
-                          {s.priority}
-                        </span>
-                      )}
-                    </div>
-                    <p className="mt-1 text-sm leading-snug text-gray-700">{s.task}</p>
+                  // One compact line per task: time, task text, priority dot,
+                  // and small edit/delete controls - not a tall stacked card.
+                  <div
+                    key={s.id}
+                    className="flex items-center gap-1.5 rounded-md border px-2 py-1.5 text-xs"
+                    style={colorStyle(hex)}
+                  >
+                    <span className="w-10 shrink-0 font-semibold">{s.start_time.slice(0, 5)}</span>
+                    {s.priority && (
+                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: hex }} title={s.priority} />
+                    )}
+                    <span className="flex-1 truncate text-gray-700">{s.task}</span>
                     {!readOnly && (
-                      <div className="mt-2 flex gap-3">
+                      <span className="flex shrink-0 gap-1.5">
                         <button
                           onClick={() => startEdit(s)}
-                          className="text-xs font-medium underline opacity-80 hover:opacity-100"
+                          className="text-[10px] font-medium underline opacity-80 hover:opacity-100"
                         >
                           Edit
                         </button>
                         <button
                           onClick={() => deleteSlot(s.id)}
-                          className="text-xs font-medium underline opacity-80 hover:opacity-100"
+                          className="text-[10px] font-medium underline opacity-80 hover:opacity-100"
                         >
                           Delete
                         </button>
-                      </div>
+                      </span>
                     )}
                   </div>
                 )
