@@ -80,10 +80,10 @@ function colorStyle(hex: string) {
 // column, worked out from Urgency + Importance instead of typed by hand.
 function quadrant(urgency: string | null, importance: string | null) {
   if (!urgency || !importance) return null
-  if (urgency === 'Urgent' && importance === 'Important') return { label: 'Do First', color: '#dc2626' }
-  if (urgency === 'Not Urgent' && importance === 'Important') return { label: 'Schedule', color: '#2563eb' }
-  if (urgency === 'Urgent' && importance === 'Not Important') return { label: 'Delegate', color: '#f59e0b' }
-  return { label: 'Eliminate', color: '#9ca3af' }
+  if (urgency === 'Urgent' && importance === 'Important') return { label: 'Q1 · Do First', color: '#dc2626' }
+  if (urgency === 'Not Urgent' && importance === 'Important') return { label: 'Q2 · Schedule', color: '#2563eb' }
+  if (urgency === 'Urgent' && importance === 'Not Important') return { label: 'Q3 · Delegate', color: '#f59e0b' }
+  return { label: 'Q4 · Eliminate', color: '#9ca3af' }
 }
 
 function todayISO() {
@@ -886,6 +886,34 @@ export default function TodoList({
           })}
         </div>
       )}
+
+      {filter !== 'Done' && filter !== 'Cancelled' && (() => {
+        const recentlyDone = todos
+          .filter((t) => t.status === 'Done')
+          .sort((a, b) => (b.completed_at ?? '').localeCompare(a.completed_at ?? ''))
+          .slice(0, 5)
+        if (recentlyDone.length === 0) return null
+        return (
+          <div className="mt-6 rounded-xl border border-gray-100 bg-gray-50 p-4">
+            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Recently completed
+            </h3>
+            <div className="space-y-1.5">
+              {recentlyDone.map((t) => (
+                <div key={t.id} className="flex items-center justify-between gap-3 text-sm">
+                  <span className="flex items-center gap-2 truncate text-gray-600">
+                    <span className="text-green-600">✓</span>
+                    <span className="truncate line-through decoration-gray-300">{t.task}</span>
+                  </span>
+                  <span className="shrink-0 text-xs text-gray-400">
+                    {t.completed_at ? new Date(t.completed_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : ''}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
