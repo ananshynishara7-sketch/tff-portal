@@ -54,6 +54,25 @@ export default function DashboardShell({
 }) {
   const router = useRouter()
   const supabase = createClient()
+  const [displayName, setDisplayName] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadName() {
+      const { data: userData } = await supabase.auth.getUser()
+      if (!userData.user) return
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', userData.user.id)
+        .single()
+      if (!cancelled) setDisplayName(profile?.full_name ?? null)
+    }
+    loadName()
+    return () => {
+      cancelled = true
+    }
+  }, [supabase])
 
   async function handleLogout() {
     await supabase.auth.signOut()
@@ -70,7 +89,7 @@ export default function DashboardShell({
           </span>
           <div>
             <p className="text-sm font-semibold">The Flag Forum</p>
-            <p className="text-xs text-white/70">{roleLabel}</p>
+            <p className="text-xs text-white/70">{displayName ?? roleLabel}</p>
           </div>
         </div>
         <nav className="flex flex-row overflow-x-auto px-2 md:flex-col md:overflow-visible">
