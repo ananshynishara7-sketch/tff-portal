@@ -64,22 +64,39 @@ export default function FamilyAttendancePage() {
     if (!familyId) return
     setLoading(true)
 
-    const [{ data: familyData }, { data: participants }, { data: allAttendance }, { data: leaveRequests }] =
-      await Promise.all([
-        supabase.from('families').select('*').eq('id', familyId).single(),
-        supabase.from('participants').select('id, full_name, status').eq('family_id', familyId).order('full_name'),
-        supabase.from('attendance_records').select('participant_id, date, code'),
-        supabase
-          .from('leave_requests')
-          .select('id, request_type, reason, status, participant_id, decided_by:profiles(full_name)')
-          .lte('leave_start_date', date)
-          .gte('leave_end_date', date),
-      ])
+    const [
+      { data: familyData },
+      { data: participants },
+      { count: onLeaveActiveCount },
+      { data: allAttendance },
+      { data: leaveRequests },
+    ] = await Promise.all([
+      supabase.from('families').select('*').eq('id', familyId).single(),
+      // Only Active participants show in this family's attendance record -
+      // On Leave / Left / Deceased people are excluded from here entirely.
+      supabase
+        .from('participants')
+        .select('id, full_name, status')
+        .eq('family_id', familyId)
+        .eq('status', 'Active')
+        .order('full_name'),
+      supabase
+        .from('participants')
+        .select('*', { count: 'exact', head: true })
+        .eq('family_id', familyId)
+        .eq('status', 'On Leave'),
+      supabase.from('attendance_records').select('participant_id, date, code'),
+      supabase
+        .from('leave_requests')
+        .select('id, request_type, reason, status, participant_id, decided_by:profiles(full_name)')
+        .lte('leave_start_date', date)
+        .gte('leave_end_date', date),
+    ])
 
     setFamily(familyData ?? null)
 
     const participantList = participants ?? []
-    setOnLeaveCount(participantList.filter((p) => p.status === 'On Leave').length)
+    setOnLeaveCount(onLeaveActiveCount ?? 0)
 
     // Raw day counts per participant. Two different formulas are built from
     // these, matching the register's own two formulas exactly:
@@ -237,7 +254,6 @@ export default function FamilyAttendancePage() {
             <tr>
               <th className="px-4 py-3">No</th>
               <th className="px-4 py-3">First Name</th>
-              <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Selected Day</th>
               <th className="px-4 py-3">Total Present</th>
               <th className="px-4 py-3">Auth Absence</th>
@@ -252,7 +268,6 @@ export default function FamilyAttendancePage() {
               <tr key={r.id}>
                 <td className="px-4 py-2 text-gray-400">{i + 1}</td>
                 <td className="px-4 py-2 font-medium text-gray-900">{r.full_name}</td>
-                <td className="px-4 py-2 text-gray-600">{r.status}</td>
                 <td className="px-4 py-2">{r.selectedDayCode ?? '—'}</td>
                 <td className="px-4 py-2">{r.totalPresent}</td>
                 <td className="px-4 py-2">{r.authAbsence}</td>
@@ -272,8 +287,8 @@ export default function FamilyAttendancePage() {
             ))}
             {rows.length === 0 && !loading && (
               <tr>
-                <td colSpan={10} className="px-4 py-8 text-center text-gray-400">
-                  No participants in this family yet.
+                <td colSpan={9} className="px-4 py-8 text-center text-gray-400">
+                  No active participants in this family.
                 </td>
               </tr>
             )}
