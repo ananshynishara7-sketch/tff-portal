@@ -14,6 +14,7 @@ type TodoRow = {
   frequency: string | null
   urgency: string | null
   importance: string | null
+  priority_rank: number | null
   status: string
   accountability_partner: string | null
   resources_needed: string | null
@@ -138,6 +139,7 @@ export default function TodoList({
     frequency: '',
     urgency: '',
     importance: '',
+    priority_rank: '',
     status: 'To Do',
     accountability_partner: '',
     resources_needed: '',
@@ -167,7 +169,7 @@ export default function TodoList({
       supabase
         .from('facilitator_todos')
         .select(
-          'id, category, task, assigned_by, assigned_to, due_date, recurring, frequency, urgency, importance, status, accountability_partner, resources_needed, completed_at, created_at'
+          'id, category, task, assigned_by, assigned_to, due_date, recurring, frequency, urgency, importance, priority_rank, status, accountability_partner, resources_needed, completed_at, created_at'
         )
         .eq('facilitator_id', id)
         .order('due_date', { ascending: true, nullsFirst: false })
@@ -237,6 +239,7 @@ export default function TodoList({
       frequency: t.frequency ?? '',
       urgency: t.urgency ?? '',
       importance: t.importance ?? '',
+      priority_rank: t.priority_rank != null ? String(t.priority_rank) : '',
       status: t.status,
       accountability_partner: t.accountability_partner ?? '',
       resources_needed: t.resources_needed ?? '',
@@ -272,6 +275,7 @@ export default function TodoList({
       frequency: form.recurring ? form.frequency || null : null,
       urgency: form.urgency || null,
       importance: form.importance || null,
+      priority_rank: form.priority_rank ? Number(form.priority_rank) : null,
       status: form.status,
       accountability_partner: form.accountability_partner || null,
       resources_needed: form.resources_needed.trim() || null,
@@ -452,6 +456,17 @@ export default function TodoList({
                 </option>
               ))}
             </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500">Priority rank</label>
+            <input
+              type="number"
+              min={1}
+              value={form.priority_rank}
+              onChange={(e) => setForm((f) => ({ ...f, priority_rank: e.target.value }))}
+              placeholder="e.g. 1"
+              className="w-24 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#022269] focus:outline-none"
+            />
           </div>
           <label className="flex items-center gap-1.5 pb-2 text-sm text-gray-700">
             <input
@@ -704,17 +719,30 @@ export default function TodoList({
                 <div className="pl-2.5">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
-                      {t.category && (
-                        <p className="mb-0.5 text-[10.5px] font-semibold uppercase tracking-wider text-gray-400">{t.category}</p>
+                      {(t.category || q || t.priority_rank != null) && (
+                        <div className="mb-1 flex flex-wrap items-center gap-1.5">
+                          {t.category && (
+                            <span className="text-[10.5px] font-semibold uppercase tracking-wider text-gray-400">{t.category}</span>
+                          )}
+                          {q && (
+                            <span
+                              className="rounded-full border px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-wide"
+                              style={{ borderColor: q.color, color: q.color }}
+                              title={`Urgency: ${t.urgency} · Importance: ${t.importance}`}
+                            >
+                              {q.label}
+                            </span>
+                          )}
+                          {t.priority_rank != null && (
+                            <span className="rounded-full border border-gray-300 px-1.5 py-0.5 text-[9.5px] font-semibold text-gray-500">
+                              #{t.priority_rank}
+                            </span>
+                          )}
+                        </div>
                       )}
-                      <div className="flex items-center gap-2">
-                        {q && (
-                          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: q.color }} title={`${q.label} (${t.urgency}, ${t.importance})`} />
-                        )}
-                        <p className={`text-[15px] font-semibold leading-snug text-gray-900 ${isCancelled ? 'text-gray-400 line-through' : ''}`}>
-                          {t.task}
-                        </p>
-                      </div>
+                      <p className={`text-[15px] font-semibold leading-snug text-gray-900 ${isCancelled ? 'text-gray-400 line-through' : ''}`}>
+                        {t.task}
+                      </p>
                     </div>
 
                     <div className="flex shrink-0 items-center gap-1.5">
