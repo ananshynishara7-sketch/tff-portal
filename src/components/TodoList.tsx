@@ -124,6 +124,8 @@ export default function TodoList({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState('Active')
+  const [sortBy, setSortBy] = useState<'due_date' | 'task_asc' | 'task_desc' | 'priority_rank'>('due_date')
+  const [showIconKey, setShowIconKey] = useState(false)
   const [showColours, setShowColours] = useState(false)
   const [newStatusName, setNewStatusName] = useState('')
   const [newStatusColor, setNewStatusColor] = useState('#6b7280')
@@ -216,10 +218,21 @@ export default function TodoList({
   }, [todos])
 
   const visibleTodos = useMemo(() => {
-    if (filter === 'All') return todos
-    if (filter === 'Active') return todos.filter((t) => t.status !== 'Done' && t.status !== 'Cancelled')
-    return todos.filter((t) => t.status === filter)
-  }, [todos, filter])
+    const base =
+      filter === 'All'
+        ? todos
+        : filter === 'Active'
+        ? todos.filter((t) => t.status !== 'Done' && t.status !== 'Cancelled')
+        : todos.filter((t) => t.status === filter)
+
+    const sorted = [...base]
+    if (sortBy === 'task_asc') sorted.sort((a, b) => a.task.localeCompare(b.task))
+    else if (sortBy === 'task_desc') sorted.sort((a, b) => b.task.localeCompare(a.task))
+    else if (sortBy === 'priority_rank')
+      sorted.sort((a, b) => (a.priority_rank ?? Infinity) - (b.priority_rank ?? Infinity))
+    // 'due_date' is already the order the data loaded in (due date, then created).
+    return sorted
+  }, [todos, filter, sortBy])
 
   function startAdd() {
     setFormTarget('new')
@@ -468,6 +481,20 @@ export default function TodoList({
               className="w-24 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#022269] focus:outline-none"
             />
           </div>
+          {(() => {
+            const preview = quadrant(form.urgency || null, form.importance || null)
+            return preview ? (
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-500">Quadrant</label>
+                <span
+                  className="inline-block rounded-full border px-2.5 py-2 text-xs font-semibold uppercase tracking-wide"
+                  style={{ borderColor: preview.color, color: preview.color }}
+                >
+                  {preview.label}
+                </span>
+              </div>
+            ) : null
+          })()}
           <label className="flex items-center gap-1.5 pb-2 text-sm text-gray-700">
             <input
               type="checkbox"
@@ -555,7 +582,7 @@ export default function TodoList({
   }
 
   return (
-    <div>
+    <div className="max-w-4xl">
       {/* Stats - same numbers the reference spreadsheet tracked at the top. */}
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
         <StatTile label="Total Tasks" value={String(stats.total)} />
@@ -670,6 +697,51 @@ export default function TodoList({
           </button>
         )}
       </div>
+
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <label className="flex items-center gap-1.5 text-xs text-gray-500">
+          Sort by
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+            className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 focus:border-[#022269] focus:outline-none"
+          >
+            <option value="due_date">Due date</option>
+            <option value="task_asc">Task A → Z</option>
+            <option value="task_desc">Task Z → A</option>
+            <option value="priority_rank">Priority rank</option>
+          </select>
+        </label>
+        <button
+          onClick={() => setShowIconKey((v) => !v)}
+          className="flex items-center gap-1 text-xs font-medium text-gray-500 underline hover:text-gray-800"
+        >
+          {showIconKey ? 'Hide' : 'Show'} icon key
+        </button>
+      </div>
+
+      {showIconKey && (
+        <div className="mb-4 flex flex-wrap gap-x-5 gap-y-1.5 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2.5 text-xs text-gray-500">
+          <span className="flex items-center gap-1.5">
+            <Icon path={ICONS.calendar} className="h-3.5 w-3.5 opacity-70" /> Due date
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Icon path={ICONS.arrowRight} className="h-3.5 w-3.5 opacity-70" /> Assigned to
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Icon path={ICONS.user} className="h-3.5 w-3.5 opacity-70" /> Assigned by
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Icon path={ICONS.repeat} className="h-3.5 w-3.5 opacity-70" /> Recurring
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Icon path={ICONS.shield} className="h-3.5 w-3.5 opacity-70" /> Accountability partner
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Icon path={ICONS.box} className="h-3.5 w-3.5 opacity-70" /> Resources needed
+          </span>
+        </div>
+      )}
 
       {formTarget === 'new' && renderForm()}
 
