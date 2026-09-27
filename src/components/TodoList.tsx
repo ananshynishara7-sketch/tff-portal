@@ -44,6 +44,26 @@ const IMPORTANCES = ['Important', 'Not Important']
 
 const DEFAULT_COLOR = '#9ca3af'
 
+// Small inline icons (no icon library dependency) used to make the meta
+// line scannable instead of a wall of dot-separated text.
+function Icon({ path, className = 'h-3.5 w-3.5' }: { path: string; className?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6} className={className}>
+      <path d={path} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+const ICONS = {
+  calendar: 'M5.5 3v2.5M14.5 3v2.5M3.5 8h13M4.5 5h11a1 1 0 0 1 1 1v9.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z',
+  user: 'M10 10a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Zm-6 7c0-3 2.7-5.4 6-5.4s6 2.4 6 5.4',
+  arrowRight: 'M10 4.5 15.5 10 10 15.5M4 10h11',
+  repeat: 'M4 7.5h9a2.5 2.5 0 0 1 2.5 2.5v1M16 12.5H7A2.5 2.5 0 0 1 4.5 10V9M6.5 5 4 7.5 6.5 10M13.5 15l2.5-2.5L13.5 10',
+  shield: 'M10 3 4 5v4.5c0 4 2.6 6.9 6 7.5 3.4-.6 6-3.5 6-7.5V5l-6-2Z',
+  box: 'M3.5 6.5 10 3l6.5 3.5L10 10 3.5 6.5ZM3.5 6.5V14l6.5 3.5m0-7.5V17.5m0-7.5L16.5 6.5m0 0V14L10 17.5',
+  pencil: 'M13 4.5 15.5 7 7 15.5 4 16.5 5 13.5 13 4.5Z',
+  trash: 'M4.5 6h11M8.5 6V4.5h3V6M7 6v9.5a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1V6M9 9v4M11 9v4',
+}
+
 // Turns a picked hex colour into a light-background / coloured-border /
 // coloured-text card style, same trick used for Blocked Time and the
 // Masterplan.
@@ -522,11 +542,11 @@ export default function TodoList({
   return (
     <div>
       {/* Stats - same numbers the reference spreadsheet tracked at the top. */}
-      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
         <StatTile label="Total Tasks" value={String(stats.total)} />
-        <StatTile label="Completed" value={String(stats.completed)} />
-        <StatTile label="In Progress" value={String(stats.inProgress)} />
-        <StatTile label="Cancelled" value={String(stats.cancelled)} />
+        <StatTile label="Completed" value={String(stats.completed)} accent="#16a34a" />
+        <StatTile label="In Progress" value={String(stats.inProgress)} accent="#2563eb" />
+        <StatTile label="Cancelled" value={String(stats.cancelled)} accent="#6b7280" />
         <StatTile label="Completion Rate" value={`${Math.round(stats.completionRate * 100)}%`} />
         <StatTile label="Done This Week" value={String(stats.doneThisWeek)} />
         <StatTile
@@ -541,11 +561,16 @@ export default function TodoList({
       </div>
 
       {!readOnly && (
-        <div className="mb-4 flex justify-end">
+        <div className="mb-3 flex justify-end">
           <button
             onClick={() => setShowColours((v) => !v)}
-            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-600 hover:border-gray-400 hover:bg-gray-50"
           >
+            <span className="flex -space-x-1">
+              {statuses.slice(0, 4).map((s) => (
+                <span key={s.id} className="h-3 w-3 rounded-full ring-2 ring-white" style={{ backgroundColor: s.color }} />
+              ))}
+            </span>
             {showColours ? 'Hide Colours' : 'Edit Colours'}
           </button>
         </div>
@@ -601,26 +626,32 @@ export default function TodoList({
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-1.5">
-          {FILTERS.map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`rounded-full border px-3 py-1 text-xs font-medium ${
-                filter === f
-                  ? 'border-[#022269] bg-[#022269] text-white'
-                  : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              {f}
-            </button>
-          ))}
+          {FILTERS.map((f) => {
+            const count =
+              f === 'All' ? todos.length : f === 'Active' ? todos.filter((t) => t.status !== 'Done' && t.status !== 'Cancelled').length : todos.filter((t) => t.status === f).length
+            return (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors ${
+                  filter === f
+                    ? 'bg-[#022269] text-white shadow-sm'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {f}
+                <span className={filter === f ? 'ml-1.5 text-white/70' : 'ml-1.5 text-gray-400'}>{count}</span>
+              </button>
+            )
+          })}
         </div>
         {!readOnly && formTarget !== 'new' && (
           <button
             onClick={startAdd}
-            className="rounded-md bg-[#022269] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
+            className="flex items-center gap-1.5 rounded-md bg-[#022269] px-3.5 py-2 text-sm font-medium text-white shadow-sm hover:opacity-90"
           >
-            + Add Task
+            <Icon path="M10 4v12M4 10h12" className="h-4 w-4" />
+            Add Task
           </button>
         )}
       </div>
@@ -628,11 +659,14 @@ export default function TodoList({
       {formTarget === 'new' && renderForm()}
 
       {visibleTodos.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-400">
-          Nothing here.
+        <div className="rounded-xl border border-dashed border-gray-300 bg-white p-10 text-center">
+          <p className="text-sm font-medium text-gray-400">Nothing here yet.</p>
+          <p className="mt-0.5 text-xs text-gray-300">
+            {filter === 'Active' ? 'All caught up! Switch tabs to see other tasks.' : 'Add a task to get started.'}
+          </p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           {visibleTodos.map((t) => {
             if (t.id === formTarget) return <div key={t.id}>{renderForm()}</div>
 
@@ -640,74 +674,113 @@ export default function TodoList({
             const dl = t.due_date ? daysLeft(t.due_date) : null
             const overdue = dl != null && dl < 0 && t.status !== 'Done' && t.status !== 'Cancelled'
             const hex = colorByStatus[t.status] ?? DEFAULT_COLOR
+            const isDone = t.status === 'Done'
+            const isCancelled = t.status === 'Cancelled'
 
-            const meta = [
-              t.due_date && `Due ${t.due_date}${dl != null ? ` (${overdue ? `${Math.abs(dl)}d overdue` : dl === 0 ? 'today' : `${dl}d left`})` : ''}`,
-              t.assigned_to && `Assigned to ${t.assigned_to}`,
-              t.assigned_by && `Assigned by ${t.assigned_by}`,
-              t.recurring && `Recurring${t.frequency ? ` · ${t.frequency}` : ''}`,
-              t.accountability_partner && `Accountability: ${t.accountability_partner}`,
-              t.resources_needed && `Needs: ${t.resources_needed}`,
-            ].filter(Boolean)
+            const chips: { icon: string; label: string; danger?: boolean }[] = []
+            if (t.due_date) {
+              chips.push({
+                icon: ICONS.calendar,
+                label: `${t.due_date}${dl != null ? ` · ${overdue ? `${Math.abs(dl)}d overdue` : dl === 0 ? 'due today' : `${dl}d left`}` : ''}`,
+                danger: overdue,
+              })
+            }
+            if (t.assigned_to) chips.push({ icon: ICONS.arrowRight, label: t.assigned_to })
+            if (t.assigned_by) chips.push({ icon: ICONS.user, label: `from ${t.assigned_by}` })
+            if (t.recurring) chips.push({ icon: ICONS.repeat, label: t.frequency || 'Recurring' })
+            if (t.accountability_partner) chips.push({ icon: ICONS.shield, label: t.accountability_partner })
+            if (t.resources_needed) chips.push({ icon: ICONS.box, label: t.resources_needed })
 
-            // The whole card takes on the status colour, same idea as
-            // Blocked Time's priority-coloured cards.
+            // A soft tint of the status colour as the card's background and
+            // left accent bar - the whole card reads as that status at a
+            // glance, without the text becoming hard to read.
             return (
-              <div key={t.id} className="rounded-lg border p-3 shadow-sm" style={colorStyle(hex)}>
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {t.category && (
-                      <span className="rounded-full border border-current/30 bg-white/50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide">
-                        {t.category}
-                      </span>
-                    )}
-                    <span className={`text-sm font-medium text-gray-900 ${t.status === 'Cancelled' ? 'line-through opacity-60' : ''}`}>
-                      {t.task}
-                    </span>
+              <div
+                key={t.id}
+                className="group relative overflow-hidden rounded-xl border border-gray-100 bg-white p-4 shadow-sm ring-1 ring-transparent transition-shadow hover:shadow-md"
+                style={{ backgroundColor: `${hex}0D` }}
+              >
+                <div className="absolute inset-y-0 left-0 w-1" style={{ backgroundColor: hex }} />
+                <div className="pl-2.5">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      {t.category && (
+                        <p className="mb-0.5 text-[10.5px] font-semibold uppercase tracking-wider text-gray-400">{t.category}</p>
+                      )}
+                      <div className="flex items-center gap-2">
+                        {q && (
+                          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: q.color }} title={`${q.label} (${t.urgency}, ${t.importance})`} />
+                        )}
+                        <p className={`text-[15px] font-semibold leading-snug text-gray-900 ${isCancelled ? 'text-gray-400 line-through' : ''}`}>
+                          {t.task}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      {readOnly ? (
+                        <span
+                          className="rounded-full px-2.5 py-1 text-[10.5px] font-semibold uppercase tracking-wide text-white shadow-sm"
+                          style={{ backgroundColor: hex }}
+                        >
+                          {t.status}
+                        </span>
+                      ) : (
+                        <select
+                          value={t.status}
+                          onChange={(e) => quickSetStatus(t, e.target.value)}
+                          className="cursor-pointer appearance-none rounded-full py-1 pl-2.5 pr-6 text-[10.5px] font-semibold uppercase tracking-wide text-white shadow-sm focus:outline-none"
+                          style={{
+                            backgroundColor: hex,
+                            backgroundImage:
+                              "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='white'%3E%3Cpath d='M5.5 8l4.5 4.5L14.5 8'/%3E%3C/svg%3E\")",
+                            backgroundRepeat: 'no-repeat',
+                            backgroundPosition: 'right 6px center',
+                            backgroundSize: '10px',
+                          }}
+                        >
+                          {statuses.map((s) => (
+                            <option key={s.id} value={s.name} className="bg-white text-gray-900 normal-case">
+                              {s.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      {!readOnly && (
+                        <div className="flex items-center gap-0.5">
+                          <button
+                            onClick={() => startEdit(t)}
+                            title="Edit"
+                            className="rounded-md p-1.5 text-gray-400 hover:bg-white hover:text-[#022269]"
+                          >
+                            <Icon path={ICONS.pencil} />
+                          </button>
+                          <button
+                            onClick={() => deleteTodo(t.id)}
+                            title="Delete"
+                            className="rounded-md p-1.5 text-gray-400 hover:bg-white hover:text-red-600"
+                          >
+                            <Icon path={ICONS.trash} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex shrink-0 items-center gap-1.5">
-                    {q && (
-                      <span
-                        className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white"
-                        style={{ backgroundColor: q.color }}
-                      >
-                        {q.label}
-                      </span>
-                    )}
-                    {readOnly ? (
-                      <span
-                        className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white"
-                        style={{ backgroundColor: hex }}
-                      >
-                        {t.status}
-                      </span>
-                    ) : (
-                      <select
-                        value={t.status}
-                        onChange={(e) => quickSetStatus(t, e.target.value)}
-                        className="rounded-full border-0 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white"
-                        style={{ backgroundColor: hex }}
-                      >
-                        {statuses.map((s) => (
-                          <option key={s.id} value={s.name} className="bg-white text-gray-900 normal-case">
-                            {s.name}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
+
+                  {chips.length > 0 && !isDone && (
+                    <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1.5">
+                      {chips.map((c, i) => (
+                        <span
+                          key={i}
+                          className={`flex items-center gap-1 text-xs ${c.danger ? 'font-semibold text-red-600' : 'text-gray-500'}`}
+                        >
+                          <Icon path={c.icon} className="h-3.5 w-3.5 shrink-0 opacity-70" />
+                          {c.label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                {meta.length > 0 && <p className="mt-1 text-xs text-gray-600">{meta.join(' · ')}</p>}
-                {!readOnly && (
-                  <div className="mt-2 flex gap-3">
-                    <button onClick={() => startEdit(t)} className="text-xs font-medium underline opacity-80 hover:opacity-100">
-                      Edit
-                    </button>
-                    <button onClick={() => deleteTodo(t.id)} className="text-xs font-medium underline opacity-80 hover:opacity-100">
-                      Delete
-                    </button>
-                  </div>
-                )}
               </div>
             )
           })}
@@ -717,12 +790,14 @@ export default function TodoList({
   )
 }
 
-function StatTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function StatTile({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: string }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
-      <p className="text-[11px] text-gray-500">{label}</p>
-      <p className="mt-0.5 text-xl font-semibold text-[#022269]">{value}</p>
-      {sub && <p className="text-[10px] text-gray-400">{sub}</p>}
+    <div className="rounded-xl border border-gray-100 bg-white p-3.5 shadow-sm">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">{label}</p>
+      <p className="mt-1 text-2xl font-bold" style={{ color: accent ?? '#022269' }}>
+        {value}
+      </p>
+      {sub && <p className="mt-0.5 text-[10.5px] text-gray-400">{sub}</p>}
     </div>
   )
 }
