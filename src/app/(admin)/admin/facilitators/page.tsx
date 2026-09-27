@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import DashboardShell from '@/components/DashboardShell'
+import WeeklyBlockedTime from '@/components/WeeklyBlockedTime'
 import { createClient } from '@/lib/supabase/client'
 
 const navItems = [
@@ -28,6 +29,7 @@ type Facilitator = {
   emergency_contact_phone: string | null
   notes: string | null
   sort_order: number
+  profile_id: string | null
 }
 
 type LeaveEntry = {
@@ -681,6 +683,21 @@ export default function FacilitatorsPage() {
                       )
                     })}
                   </div>
+                )}
+              </div>
+
+              {/* Blocked Time - read only, filled in by the facilitator themselves once logged in */}
+              <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                <h2 className="mb-4 text-base font-semibold text-gray-900">
+                  {selected.full_name}&apos;s Blocked Time
+                </h2>
+                {selected.profile_id ? (
+                  <WeeklyBlockedTime facilitatorId={selected.profile_id} readOnly />
+                ) : (
+                  <p className="text-sm text-gray-400">
+                    {selected.full_name} doesn&apos;t have a login yet, so they haven&apos;t filled in a
+                    weekly plan.
+                  </p>
                 )}
               </div>
             </div>

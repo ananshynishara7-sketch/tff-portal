@@ -1,4 +1,5 @@
 import DashboardShell from '@/components/DashboardShell'
+import WeeklyBlockedTime from '@/components/WeeklyBlockedTime'
 
 const navItems = [
   { label: 'Dashboard', href: '/lead-facilitator' },
@@ -11,24 +12,14 @@ const navItems = [
   { label: 'Progress Tracking', href: '/lead-facilitator/progress' },
 ]
 
-export default function LeadFacilitatorDashboard() {
+export default function LeadFacilitatorBlockedTimePage() {
   return (
     <DashboardShell roleLabel="Lead Facilitator" navItems={navItems}>
-      <h1 className="mb-6 text-2xl font-semibold text-gray-900">Dashboard</h1>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <StatCard label="Attendance Trend" value="—" />
-        <StatCard label="Facilitator Activity" value="—" />
-        <StatCard label="Follow-ups Needed" value="—" />
-      </div>
+      <h1 className="mb-2 text-2xl font-semibold text-gray-900">My Blocked Time</h1>
+      <p className="mb-6 text-sm text-gray-500">
+        Your own weekly plan - the same layout every week. Click any field to edit it.
+      </p>
+      <WeeklyBlockedTime />
     </DashboardShell>
-  )
-}
-
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-[#022269]">{value}</p>
-    </div>
   )
 }
