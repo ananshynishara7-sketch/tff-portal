@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -63,9 +64,14 @@ export default function DashboardShell({
     <div className="flex min-h-screen flex-col md:flex-row">
       {/* Sidebar on desktop, top bar on mobile */}
       <aside className="w-full border-b border-gray-200 bg-[#022269] text-white md:h-screen md:w-56 md:border-b-0 md:border-r">
-        <div className="p-4">
-          <p className="text-sm font-semibold">The Flag Forum</p>
-          <p className="text-xs text-white/70">{roleLabel}</p>
+        <div className="flex items-center gap-2 p-4">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-white p-1">
+            <Image src="/logo-square.png" alt="" width={40} height={40} className="h-full w-full object-contain" />
+          </span>
+          <div>
+            <p className="text-sm font-semibold">The Flag Forum</p>
+            <p className="text-xs text-white/70">{roleLabel}</p>
+          </div>
         </div>
         <nav className="flex flex-row overflow-x-auto px-2 md:flex-col md:overflow-visible">
           {navItems.map((item) => (
