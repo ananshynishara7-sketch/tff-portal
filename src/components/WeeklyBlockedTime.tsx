@@ -37,6 +37,26 @@ function defaultTaskFor(time: string) {
   return time === LUNCH_TIME ? 'Lunch Break' : 'Focus Time'
 }
 
+// This plan repeats every week - the week picker below is just for
+// context (so it's clear next week already has the same plan), it doesn't
+// change what data is shown.
+function startOfWeek(d: Date) {
+  const copy = new Date(d)
+  const day = copy.getDay() // 0 = Sunday
+  const diffToMonday = day === 0 ? -6 : 1 - day
+  copy.setDate(copy.getDate() + diffToMonday)
+  copy.setHours(0, 0, 0, 0)
+  return copy
+}
+function addDays(d: Date, n: number) {
+  const copy = new Date(d)
+  copy.setDate(copy.getDate() + n)
+  return copy
+}
+function formatShort(d: Date) {
+  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+}
+
 // Turns a picked hex colour into a light-background / coloured-border /
 // coloured-text card style, same trick the Masterplan uses for its groups.
 function colorStyle(hex: string) {
@@ -66,6 +86,10 @@ export default function WeeklyBlockedTime({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showColours, setShowColours] = useState(false)
+  // Display-only: which week's dates to show next to the day names. The
+  // plan itself repeats every week, so this never changes what's loaded.
+  const [weekOffset, setWeekOffset] = useState(0)
+  const weekStart = useMemo(() => addDays(startOfWeek(new Date()), weekOffset * 7), [weekOffset])
   const [newPriorityName, setNewPriorityName] = useState('')
   const [newPriorityColor, setNewPriorityColor] = useState('#6b7280')
 
@@ -385,12 +409,46 @@ export default function WeeklyBlockedTime({
         </div>
       )}
 
+      {/* Week picker - display only. The plan repeats every week, so
+          picking "Next week" shows the same tasks with next week's dates,
+          confirming they're already blocked out. */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <button
+          onClick={() => setWeekOffset((w) => w - 1)}
+          className="rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
+        >
+          ‹ Week
+        </button>
+        <span className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700">
+          {weekOffset === 0 ? 'This week' : weekOffset === 1 ? 'Next week' : weekOffset === -1 ? 'Last week' : `Week of ${formatShort(weekStart)}`}
+          {' · '}
+          {formatShort(weekStart)} – {formatShort(addDays(weekStart, 4))}
+        </span>
+        <button
+          onClick={() => setWeekOffset((w) => w + 1)}
+          className="rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
+        >
+          Week ›
+        </button>
+        {weekOffset !== 0 && (
+          <button
+            onClick={() => setWeekOffset(0)}
+            className="text-xs font-medium text-[#022269] underline"
+          >
+            Back to this week
+          </button>
+        )}
+        <span className="text-xs text-gray-400">This plan repeats every week, so it already covers {weekOffset === 0 ? 'next week' : 'this week'} too.</span>
+      </div>
+
       {/* Each day gets a wider, fixed-width column with room to type in,
           scrolling horizontally on narrow screens instead of squeezing. */}
       <div className="flex gap-4 overflow-x-auto pb-2">
         {DAYS.map((day) => (
           <div key={day.num} className="w-72 shrink-0 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-            <h3 className="mb-3 text-sm font-semibold text-gray-900">{day.label}</h3>
+            <h3 className="mb-3 text-sm font-semibold text-gray-900">
+              {day.label} <span className="font-normal text-gray-400">{formatShort(addDays(weekStart, day.num - 1))}</span>
+            </h3>
             {/* Capped height with its own scroll, so 15 slots a day don't
                 push the whole page into one long scroll. */}
             <div className="max-h-[65vh] space-y-1.5 overflow-y-auto pr-1">
