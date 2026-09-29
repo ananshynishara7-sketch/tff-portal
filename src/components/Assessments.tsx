@@ -3,25 +3,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
-type Phase = { id: string; name: string; is_baseline: boolean; sort_order: number }
+type Phase = { id: string; name: string; is_baseline: boolean; sort_order: number; color: string }
 type Component = { id: string; phase_id: string; name: string; min_score: number; max_score: number; weight: number; sort_order: number }
 type Participant = { id: string; full_name: string; family_id: string | null }
 type Family = { id: string; name: string; display_color: string }
 type ScoreEntry = { scoreId: string; notes: string | null; values: Record<string, number> } // componentId -> raw_value
-
-function bandOf(pgi: number | null): { label: string; color: string } | null {
-  if (pgi == null) return null
-  if (pgi >= 60) return { label: 'High', color: '#16a34a' }
-  if (pgi >= 40) return { label: 'Mid', color: '#ca8a04' }
-  return { label: 'Low', color: '#dc2626' }
-}
-
-function trajectoryOf(growth: number | null): { label: string; color: string } | null {
-  if (growth == null) return null
-  if (growth >= 5) return { label: '🟢 Rising', color: '#16a34a' }
-  if (growth <= -5) return { label: '🔴 Declining', color: '#dc2626' }
-  return { label: '🟡 Stable', color: '#ca8a04' }
-}
+type Band = { id: string; name: string; color: string; min_pgi: number; sort_order: number }
+type Trajectory = { id: string; name: string; color: string; min_growth: number; sort_order: number }
 
 function colorStyle(hex: string) {
   return { backgroundColor: `${hex}1A`, borderColor: hex, color: hex }
@@ -35,11 +23,17 @@ export default function Assessments({ canManagePhases = false }: { canManagePhas
   const [participants, setParticipants] = useState<Participant[]>([])
   const [families, setFamilies] = useState<Family[]>([])
   const [scores, setScores] = useState<Record<string, ScoreEntry>>({}) // `${phaseId}|${participantId}`
+  const [bands, setBands] = useState<Band[]>([])
+  const [trajectories, setTrajectories] = useState<Trajectory[]>([])
 
   const [view, setView] = useState<'participants' | 'leaderboard' | 'family'>('participants')
   const [familyFilter, setFamilyFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [showManage, setShowManage] = useState(false)
+  const [showColours, setShowColours] = useState(false)
+
+  const [newBand, setNewBand] = useState({ name: '', color: '#0891b2', min: '' })
+  const [newTrajectory, setNewTrajectory] = useState({ name: '', color: '#0891b2', min: '' })
 
   const [editTarget, setEditTarget] = useState<{ phaseId: string; participantId: string } | null>(null)
   const [editValues, setEditValues] = useState<Record<string, string>>({})
@@ -58,19 +52,25 @@ export default function Assessments({ canManagePhases = false }: { canManagePhas
       { data: familyData },
       { data: scoreData },
       { data: componentScoreData },
+      { data: bandData },
+      { data: trajectoryData },
     ] = await Promise.all([
-      supabase.from('assessment_phases').select('id, name, is_baseline, sort_order').order('sort_order'),
+      supabase.from('assessment_phases').select('id, name, is_baseline, sort_order, color').order('sort_order'),
       supabase.from('assessment_components').select('id, phase_id, name, min_score, max_score, weight, sort_order').order('sort_order'),
       supabase.from('participants').select('id, full_name, family_id').eq('status', 'Active').order('full_name'),
       supabase.from('families').select('id, name, display_color').order('name'),
       supabase.from('assessment_scores').select('id, phase_id, participant_id, notes'),
       supabase.from('assessment_component_scores').select('assessment_score_id, component_id, raw_value'),
+      supabase.from('assessment_bands').select('id, name, color, min_pgi, sort_order').order('min_pgi', { ascending: false }),
+      supabase.from('assessment_trajectories').select('id, name, color, min_growth, sort_order').order('min_growth', { ascending: false }),
     ])
 
     setPhases(phaseData ?? [])
     setComponents(componentData ?? [])
     setParticipants(participantData ?? [])
     setFamilies(familyData ?? [])
+    setBands(bandData ?? [])
+    setTrajectories(trajectoryData ?? [])
 
     const byScoreId: Record<string, Record<string, number>> = {}
     for (const cs of componentScoreData ?? []) {
@@ -120,6 +120,16 @@ export default function Assessments({ canManagePhases = false }: { canManagePhas
       totalWeight += c.weight
     }
     return totalWeight > 0 ? Math.round((weighted / totalWeight) * 10) / 10 : null
+  }
+
+  function bandOf(pgi: number | null): Band | null {
+    if (pgi == null) return null
+    return bands.find((b) => pgi >= b.min_pgi) ?? null
+  }
+
+  function trajectoryOf(growth: number | null): Trajectory | null {
+    if (growth == null) return null
+    return trajectories.find((t) => growth >= t.min_growth) ?? null
   }
 
   function growthFor(phaseId: string, participantId: string): number | null {
@@ -223,6 +233,81 @@ export default function Assessments({ canManagePhases = false }: { canManagePhas
     load()
   }
 
+  async function updatePhaseColor(id: string, color: string) {
+    await supabase.from('assessment_phases').update({ color }).eq('id', id)
+    load()
+  }
+
+  async function renameBand(id: string, name: string) {
+    if (!name.trim()) return
+    await supabase.from('assessment_bands').update({ name: name.trim() }).eq('id', id)
+    load()
+  }
+
+  async function updateBandColor(id: string, color: string) {
+    await supabase.from('assessment_bands').update({ color }).eq('id', id)
+    load()
+  }
+
+  async function updateBandThreshold(id: string, minPgi: string) {
+    await supabase.from('assessment_bands').update({ min_pgi: Number(minPgi) || 0 }).eq('id', id)
+    load()
+  }
+
+  async function deleteBand(id: string, name: string) {
+    if (!confirm(`Remove the "${name}" band?`)) return
+    await supabase.from('assessment_bands').delete().eq('id', id)
+    load()
+  }
+
+  async function addBand(e: React.FormEvent) {
+    e.preventDefault()
+    if (!newBand.name.trim() || newBand.min === '') return
+    await supabase.from('assessment_bands').insert({
+      name: newBand.name.trim(),
+      color: newBand.color,
+      min_pgi: Number(newBand.min) || 0,
+      sort_order: bands.length,
+    })
+    setNewBand({ name: '', color: '#0891b2', min: '' })
+    load()
+  }
+
+  async function renameTrajectory(id: string, name: string) {
+    if (!name.trim()) return
+    await supabase.from('assessment_trajectories').update({ name: name.trim() }).eq('id', id)
+    load()
+  }
+
+  async function updateTrajectoryColor(id: string, color: string) {
+    await supabase.from('assessment_trajectories').update({ color }).eq('id', id)
+    load()
+  }
+
+  async function updateTrajectoryThreshold(id: string, minGrowth: string) {
+    await supabase.from('assessment_trajectories').update({ min_growth: Number(minGrowth) || 0 }).eq('id', id)
+    load()
+  }
+
+  async function deleteTrajectory(id: string, name: string) {
+    if (!confirm(`Remove the "${name}" trajectory?`)) return
+    await supabase.from('assessment_trajectories').delete().eq('id', id)
+    load()
+  }
+
+  async function addTrajectory(e: React.FormEvent) {
+    e.preventDefault()
+    if (!newTrajectory.name.trim() || newTrajectory.min === '') return
+    await supabase.from('assessment_trajectories').insert({
+      name: newTrajectory.name.trim(),
+      color: newTrajectory.color,
+      min_growth: Number(newTrajectory.min) || 0,
+      sort_order: trajectories.length,
+    })
+    setNewTrajectory({ name: '', color: '#0891b2', min: '' })
+    load()
+  }
+
   async function setBaseline(id: string) {
     await Promise.all(phases.map((p) => supabase.from('assessment_phases').update({ is_baseline: p.id === id }).eq('id', p.id)))
     load()
@@ -269,13 +354,171 @@ export default function Assessments({ canManagePhases = false }: { canManagePhas
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold text-gray-900">Assessments</h1>
         {canManagePhases && (
-          <button
-            onClick={() => setShowManage((v) => !v)}
-            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-          >
-            {showManage ? 'Hide Phase Setup' : 'Manage Phases'}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowColours((v) => !v)}
+              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              {showColours ? 'Hide Colours' : 'Edit Colours'}
+            </button>
+            <button
+              onClick={() => setShowManage((v) => !v)}
+              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              {showManage ? 'Hide Phase Setup' : 'Manage Phases'}
+            </button>
+          </div>
         )}
+      </div>
+
+      {showColours && canManagePhases && (
+        <div className="mb-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h2 className="mb-4 text-base font-semibold text-gray-900">Phase colours</h2>
+          <div className="mb-6 space-y-3">
+            {phases.map((phase) => (
+              <div key={phase.id} className="flex flex-wrap items-center gap-3">
+                <input
+                  type="color"
+                  value={phase.color}
+                  onChange={(e) => updatePhaseColor(phase.id, e.target.value)}
+                  className="h-9 w-9 cursor-pointer rounded border border-gray-300"
+                />
+                <input
+                  type="text"
+                  defaultValue={phase.name}
+                  onBlur={(e) => renamePhase(phase.id, e.target.value)}
+                  className="w-56 rounded-md border border-gray-300 px-2 py-1 text-sm"
+                />
+                <span className="rounded-full border px-2 py-1 text-xs font-medium" style={colorStyle(phase.color)}>
+                  Preview
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <h2 className="mb-1 text-base font-semibold text-gray-900">PGI band colours</h2>
+          <p className="mb-3 text-xs text-gray-500">A score qualifies for a band once it reaches that band&apos;s threshold (the highest one it clears).</p>
+          <div className="mb-4 space-y-3">
+            {bands.map((band) => (
+              <div key={band.id} className="flex flex-wrap items-center gap-3">
+                <input
+                  type="color"
+                  value={band.color}
+                  onChange={(e) => updateBandColor(band.id, e.target.value)}
+                  className="h-9 w-9 cursor-pointer rounded border border-gray-300"
+                />
+                <input
+                  type="text"
+                  defaultValue={band.name}
+                  onBlur={(e) => renameBand(band.id, e.target.value)}
+                  className="w-40 rounded-md border border-gray-300 px-2 py-1 text-sm"
+                />
+                <span className="text-xs text-gray-400">at least</span>
+                <input
+                  type="number"
+                  defaultValue={band.min_pgi}
+                  onBlur={(e) => updateBandThreshold(band.id, e.target.value)}
+                  className="w-24 rounded-md border border-gray-300 px-2 py-1 text-sm"
+                />
+                <span className="rounded-full border px-2 py-1 text-xs font-medium" style={colorStyle(band.color)}>
+                  Preview
+                </span>
+                <button onClick={() => deleteBand(band.id, band.name)} className="text-xs font-medium text-red-600 hover:underline">
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+          <form onSubmit={addBand} className="mb-6 flex flex-wrap items-center gap-3 border-t border-gray-100 pt-4">
+            <input type="color" value={newBand.color} onChange={(e) => setNewBand((p) => ({ ...p, color: e.target.value }))} className="h-9 w-9 cursor-pointer rounded border border-gray-300" />
+            <input
+              type="text"
+              placeholder="Band name"
+              value={newBand.name}
+              onChange={(e) => setNewBand((p) => ({ ...p, name: e.target.value }))}
+              className="w-40 rounded-md border border-gray-300 px-2 py-1 text-sm"
+            />
+            <span className="text-xs text-gray-400">at least</span>
+            <input
+              type="number"
+              placeholder="threshold"
+              value={newBand.min}
+              onChange={(e) => setNewBand((p) => ({ ...p, min: e.target.value }))}
+              className="w-24 rounded-md border border-gray-300 px-2 py-1 text-sm"
+            />
+            <button type="submit" className="rounded-md bg-[#022269] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90">
+              + Add band
+            </button>
+          </form>
+
+          <h2 className="mb-1 text-base font-semibold text-gray-900">Growth trajectory colours</h2>
+          <p className="mb-3 text-xs text-gray-500">A growth % qualifies for a trajectory once it reaches that trajectory&apos;s threshold (the highest one it clears).</p>
+          <div className="space-y-3">
+            {trajectories.map((traj) => (
+              <div key={traj.id} className="flex flex-wrap items-center gap-3">
+                <input
+                  type="color"
+                  value={traj.color}
+                  onChange={(e) => updateTrajectoryColor(traj.id, e.target.value)}
+                  className="h-9 w-9 cursor-pointer rounded border border-gray-300"
+                />
+                <input
+                  type="text"
+                  defaultValue={traj.name}
+                  onBlur={(e) => renameTrajectory(traj.id, e.target.value)}
+                  className="w-40 rounded-md border border-gray-300 px-2 py-1 text-sm"
+                />
+                <span className="text-xs text-gray-400">at least</span>
+                <input
+                  type="number"
+                  defaultValue={traj.min_growth}
+                  onBlur={(e) => updateTrajectoryThreshold(traj.id, e.target.value)}
+                  className="w-24 rounded-md border border-gray-300 px-2 py-1 text-sm"
+                />
+                <span className="text-xs text-gray-400">% growth</span>
+                <span className="rounded-full border px-2 py-1 text-xs font-medium" style={colorStyle(traj.color)}>
+                  Preview
+                </span>
+                <button onClick={() => deleteTrajectory(traj.id, traj.name)} className="text-xs font-medium text-red-600 hover:underline">
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+          <form onSubmit={addTrajectory} className="mt-4 flex flex-wrap items-center gap-3 border-t border-gray-100 pt-4">
+            <input type="color" value={newTrajectory.color} onChange={(e) => setNewTrajectory((p) => ({ ...p, color: e.target.value }))} className="h-9 w-9 cursor-pointer rounded border border-gray-300" />
+            <input
+              type="text"
+              placeholder="Trajectory name"
+              value={newTrajectory.name}
+              onChange={(e) => setNewTrajectory((p) => ({ ...p, name: e.target.value }))}
+              className="w-40 rounded-md border border-gray-300 px-2 py-1 text-sm"
+            />
+            <span className="text-xs text-gray-400">at least</span>
+            <input
+              type="number"
+              placeholder="threshold"
+              value={newTrajectory.min}
+              onChange={(e) => setNewTrajectory((p) => ({ ...p, min: e.target.value }))}
+              className="w-24 rounded-md border border-gray-300 px-2 py-1 text-sm"
+            />
+            <span className="text-xs text-gray-400">% growth</span>
+            <button type="submit" className="rounded-md bg-[#022269] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90">
+              + Add trajectory
+            </button>
+          </form>
+        </div>
+      )}
+
+      <div className="mb-6 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+        <span className="font-medium text-gray-600">Key:</span>
+        {bands.map((b) => (
+          <span key={b.id} className="rounded-full border px-2 py-0.5" style={colorStyle(b.color)}>{b.name}</span>
+        ))}
+        <span className="mx-1 text-gray-300">|</span>
+        {trajectories.map((t) => (
+          <span key={t.id} className="rounded-full border px-2 py-0.5" style={colorStyle(t.color)}>{t.name}</span>
+        ))}
       </div>
 
       {showManage && canManagePhases && (
@@ -511,7 +754,9 @@ export default function Assessments({ canManagePhases = false }: { canManagePhas
                   <th className="px-4 py-3">Name</th>
                   <th className="px-4 py-3">Family</th>
                   {phases.map((p) => (
-                    <th key={p.id} className="px-4 py-3">{p.name}</th>
+                    <th key={p.id} className="px-4 py-3">
+                      <span className="rounded-full border px-2 py-0.5 text-xs font-medium normal-case" style={colorStyle(p.color)}>{p.name}</span>
+                    </th>
                   ))}
                   <th className="px-4 py-3">Latest PGI</th>
                   <th className="px-4 py-3">Trajectory</th>
@@ -552,7 +797,7 @@ export default function Assessments({ canManagePhases = false }: { canManagePhas
                       <td className="px-4 py-2 font-semibold text-gray-900">{latestPgi ?? '—'}</td>
                       <td className="px-4 py-2">
                         {traj ? (
-                          <span className="text-xs font-medium" style={{ color: traj.color }}>{traj.label}</span>
+                          <span className="text-xs font-medium" style={{ color: traj.color }}>{traj.name}</span>
                         ) : (
                           <span className="text-xs text-gray-300">—</span>
                         )}
@@ -627,7 +872,7 @@ export default function Assessments({ canManagePhases = false }: { canManagePhas
                       <td className={`px-4 py-2 font-medium ${r.growth >= 0 ? 'text-green-700' : 'text-red-700'}`}>
                         {r.growth >= 0 ? '+' : ''}{r.growth}%
                       </td>
-                      <td className="px-4 py-2 text-xs font-medium" style={{ color: traj?.color }}>{traj?.label}</td>
+                      <td className="px-4 py-2 text-xs font-medium" style={{ color: traj?.color }}>{traj?.name}</td>
                     </tr>
                   )
                 })
@@ -643,10 +888,19 @@ export default function Assessments({ canManagePhases = false }: { canManagePhas
                 <th className="px-4 py-3">Family</th>
                 <th className="px-4 py-3">Participants</th>
                 {phases.map((p) => (
-                  <th key={p.id} className="px-4 py-3">{p.name} mean</th>
+                  <th key={p.id} className="px-4 py-3">
+                    <span className="rounded-full border px-2 py-0.5 text-xs font-medium normal-case" style={colorStyle(p.color)}>{p.name}</span> mean
+                  </th>
                 ))}
                 <th className="px-4 py-3">Avg Growth</th>
-                <th className="px-4 py-3">🟢 / 🟡 / 🔴</th>
+                <th className="px-4 py-3">
+                  {trajectories.map((t, i) => (
+                    <span key={t.id}>
+                      {i > 0 && ' / '}
+                      <span style={{ color: t.color }}>{t.name}</span>
+                    </span>
+                  ))}
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -663,9 +917,7 @@ export default function Assessments({ canManagePhases = false }: { canManagePhas
                   })
                   .filter((g): g is number => g != null)
                 const avgGrowth = growths.length > 0 ? Math.round((growths.reduce((a, b) => a + b, 0) / growths.length) * 10) / 10 : null
-                const rising = growths.filter((g) => g >= 5).length
-                const stable = growths.filter((g) => g > -5 && g < 5).length
-                const declining = growths.filter((g) => g <= -5).length
+                const trajectoryCounts = trajectories.map((t) => growths.filter((g) => trajectoryOf(g)?.id === t.id).length)
                 return (
                   <tr key={family.id}>
                     <td className="px-4 py-2 font-medium" style={{ color: family.display_color }}>{family.name}</td>
@@ -676,7 +928,7 @@ export default function Assessments({ canManagePhases = false }: { canManagePhas
                     <td className={`px-4 py-2 font-medium ${avgGrowth != null && avgGrowth >= 0 ? 'text-green-700' : 'text-red-700'}`}>
                       {avgGrowth != null ? `${avgGrowth >= 0 ? '+' : ''}${avgGrowth}%` : '—'}
                     </td>
-                    <td className="px-4 py-2 text-xs text-gray-500">{rising} / {stable} / {declining}</td>
+                    <td className="px-4 py-2 text-xs text-gray-500">{trajectoryCounts.join(' / ')}</td>
                   </tr>
                 )
               })}
