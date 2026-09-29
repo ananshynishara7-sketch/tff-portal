@@ -9,6 +9,7 @@ const navItems = [
   { label: 'Leave Requests', href: '/admin/leave-requests' },
   { label: 'Masterplan Phase 3', href: '/admin/timetable' },
   { label: 'Announcements', href: '/admin/announcements' },
+  { label: 'Assessments', href: '/admin/assessments' },
   { label: 'Families', href: '/admin/groups' },
   { label: 'Settings', href: '/admin/settings' },
 ]

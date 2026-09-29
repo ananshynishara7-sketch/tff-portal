@@ -1,5 +1,5 @@
 import DashboardShell from '@/components/DashboardShell'
-import ParticipantsTable from '@/components/ParticipantsTable'
+import Assessments from '@/components/Assessments'
 
 const navItems = [
   { label: 'Dashboard', href: '/admin' },
@@ -14,10 +14,10 @@ const navItems = [
   { label: 'Settings', href: '/admin/settings' },
 ]
 
-export default function ParticipantsPage() {
+export default function AdminAssessmentsPage() {
   return (
-    <DashboardShell roleLabel="Administration" navItems={navItems}>
-      <ParticipantsTable />
+    <DashboardShell roleLabel="Admin" navItems={navItems}>
+      <Assessments canManagePhases />
     </DashboardShell>
   )
 }

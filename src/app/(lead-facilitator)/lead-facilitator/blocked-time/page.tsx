@@ -10,6 +10,7 @@ const navItems = [
   { label: 'My Blocked Time', href: '/lead-facilitator/blocked-time' },
   { label: 'My To-Do List', href: '/lead-facilitator/todo' },
   { label: 'Announcements', href: '/lead-facilitator/announcements' },
+  { label: 'Assessments', href: '/lead-facilitator/assessments' },
   { label: 'Progress Tracking', href: '/lead-facilitator/progress' },
 ]
 

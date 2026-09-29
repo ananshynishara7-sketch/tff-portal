@@ -9,6 +9,7 @@ const navItems = [
   { label: 'My Blocked Time', href: '/facilitator/blocked-time' },
   { label: 'My To-Do List', href: '/facilitator/todo' },
   { label: 'Announcements', href: '/facilitator/announcements' },
+  { label: 'Assessments', href: '/facilitator/assessments' },
   { label: 'Progress Notes', href: '/facilitator/progress' },
 ]
 
