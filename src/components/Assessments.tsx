@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 type Phase = { id: string; name: string; is_baseline: boolean; sort_order: number }
-type Component = { id: string; phase_id: string; name: string; max_score: number; weight: number; sort_order: number }
+type Component = { id: string; phase_id: string; name: string; min_score: number; max_score: number; weight: number; sort_order: number }
 type Participant = { id: string; full_name: string; family_id: string | null }
 type Family = { id: string; name: string; display_color: string }
 type ScoreEntry = { scoreId: string; notes: string | null; values: Record<string, number> } // componentId -> raw_value
@@ -47,7 +47,7 @@ export default function Assessments({ canManagePhases = false }: { canManagePhas
   const [saving, setSaving] = useState(false)
 
   const [newPhaseName, setNewPhaseName] = useState('')
-  const [newComponentByPhase, setNewComponentByPhase] = useState<Record<string, { name: string; max: string; weight: string }>>({})
+  const [newComponentByPhase, setNewComponentByPhase] = useState<Record<string, { name: string; min: string; max: string; weight: string }>>({})
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -60,7 +60,7 @@ export default function Assessments({ canManagePhases = false }: { canManagePhas
       { data: componentScoreData },
     ] = await Promise.all([
       supabase.from('assessment_phases').select('id, name, is_baseline, sort_order').order('sort_order'),
-      supabase.from('assessment_components').select('id, phase_id, name, max_score, weight, sort_order').order('sort_order'),
+      supabase.from('assessment_components').select('id, phase_id, name, min_score, max_score, weight, sort_order').order('sort_order'),
       supabase.from('participants').select('id, full_name, family_id').eq('status', 'Active').order('full_name'),
       supabase.from('families').select('id, name, display_color').order('name'),
       supabase.from('assessment_scores').select('id, phase_id, participant_id, notes'),
@@ -114,7 +114,8 @@ export default function Assessments({ canManagePhases = false }: { canManagePhas
     for (const c of comps) {
       const raw = entry.values[c.id]
       if (raw == null) return null
-      const pct = c.max_score > 0 ? (raw / c.max_score) * 100 : 0
+      const range = c.max_score - c.min_score
+      const pct = range > 0 ? ((raw - c.min_score) / range) * 100 : 0
       weighted += pct * c.weight
       totalWeight += c.weight
     }
@@ -233,7 +234,7 @@ export default function Assessments({ canManagePhases = false }: { canManagePhas
     load()
   }
 
-  async function updateComponent(id: string, field: 'name' | 'max_score' | 'weight', value: string) {
+  async function updateComponent(id: string, field: 'name' | 'min_score' | 'max_score' | 'weight', value: string) {
     const payload = field === 'name' ? { name: value } : { [field]: Number(value) || 0 }
     await supabase.from('assessment_components').update(payload).eq('id', id)
     load()
@@ -252,11 +253,12 @@ export default function Assessments({ canManagePhases = false }: { canManagePhas
     await supabase.from('assessment_components').insert({
       phase_id: phaseId,
       name: draft.name.trim(),
+      min_score: Number(draft.min) || 0,
       max_score: Number(draft.max) || 100,
       weight: Number(draft.weight) || 1,
       sort_order: (componentsByPhase[phaseId] ?? []).length,
     })
-    setNewComponentByPhase((prev) => ({ ...prev, [phaseId]: { name: '', max: '', weight: '' } }))
+    setNewComponentByPhase((prev) => ({ ...prev, [phaseId]: { name: '', min: '', max: '', weight: '' } }))
     load()
   }
 
@@ -311,7 +313,14 @@ export default function Assessments({ canManagePhases = false }: { canManagePhas
                         onBlur={(e) => updateComponent(c.id, 'name', e.target.value)}
                         className="w-40 rounded-md border border-gray-300 px-2 py-1"
                       />
-                      <span className="text-xs text-gray-400">out of</span>
+                      <span className="text-xs text-gray-400">lowest possible</span>
+                      <input
+                        type="number"
+                        defaultValue={c.min_score}
+                        onBlur={(e) => updateComponent(c.id, 'min_score', e.target.value)}
+                        className="w-16 rounded-md border border-gray-300 px-2 py-1"
+                      />
+                      <span className="text-xs text-gray-400">highest possible</span>
                       <input
                         type="number"
                         defaultValue={c.max_score}
@@ -337,16 +346,34 @@ export default function Assessments({ canManagePhases = false }: { canManagePhas
                       placeholder="New component name"
                       value={newComponentByPhase[phase.id]?.name ?? ''}
                       onChange={(e) =>
-                        setNewComponentByPhase((prev) => ({ ...prev, [phase.id]: { ...(prev[phase.id] ?? { max: '', weight: '' }), name: e.target.value } }))
+                        setNewComponentByPhase((prev) => ({
+                          ...prev,
+                          [phase.id]: { ...(prev[phase.id] ?? { min: '', max: '', weight: '' }), name: e.target.value },
+                        }))
                       }
                       className="w-40 rounded-md border border-gray-300 px-2 py-1 text-sm"
                     />
                     <input
                       type="number"
-                      placeholder="out of"
+                      placeholder="lowest (usually 0)"
+                      value={newComponentByPhase[phase.id]?.min ?? ''}
+                      onChange={(e) =>
+                        setNewComponentByPhase((prev) => ({
+                          ...prev,
+                          [phase.id]: { ...(prev[phase.id] ?? { name: '', max: '', weight: '' }), min: e.target.value },
+                        }))
+                      }
+                      className="w-28 rounded-md border border-gray-300 px-2 py-1 text-sm"
+                    />
+                    <input
+                      type="number"
+                      placeholder="highest"
                       value={newComponentByPhase[phase.id]?.max ?? ''}
                       onChange={(e) =>
-                        setNewComponentByPhase((prev) => ({ ...prev, [phase.id]: { ...(prev[phase.id] ?? { name: '', weight: '' }), max: e.target.value } }))
+                        setNewComponentByPhase((prev) => ({
+                          ...prev,
+                          [phase.id]: { ...(prev[phase.id] ?? { name: '', min: '', weight: '' }), max: e.target.value },
+                        }))
                       }
                       className="w-20 rounded-md border border-gray-300 px-2 py-1 text-sm"
                     />
@@ -356,7 +383,10 @@ export default function Assessments({ canManagePhases = false }: { canManagePhas
                       placeholder="weight"
                       value={newComponentByPhase[phase.id]?.weight ?? ''}
                       onChange={(e) =>
-                        setNewComponentByPhase((prev) => ({ ...prev, [phase.id]: { ...(prev[phase.id] ?? { name: '', max: '' }), weight: e.target.value } }))
+                        setNewComponentByPhase((prev) => ({
+                          ...prev,
+                          [phase.id]: { ...(prev[phase.id] ?? { name: '', min: '', max: '' }), weight: e.target.value },
+                        }))
                       }
                       className="w-20 rounded-md border border-gray-300 px-2 py-1 text-sm"
                     />
@@ -397,7 +427,7 @@ export default function Assessments({ canManagePhases = false }: { canManagePhas
               {comps.map((c) => (
                 <div key={c.id}>
                   <label className="mb-1 block text-xs font-medium text-gray-500">
-                    {c.name} (out of {c.max_score})
+                    {c.name} ({c.min_score > 0 ? `${c.min_score}–${c.max_score} scale` : `out of ${c.max_score}`})
                   </label>
                   <input
                     type="number"
