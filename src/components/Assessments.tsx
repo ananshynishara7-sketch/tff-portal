@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 
 type Phase = { id: string; name: string; is_baseline: boolean; sort_order: number; color: string }
 type Component = { id: string; phase_id: string; name: string; min_score: number; max_score: number; weight: number; sort_order: number }
-type Participant = { id: string; full_name: string; family_id: string | null }
+type Participant = { id: string; full_name: string; family_id: string | null; status: string }
 type Family = { id: string; name: string; display_color: string }
 type ScoreEntry = { scoreId: string; notes: string | null; values: Record<string, number> } // componentId -> raw_value
 type Band = { id: string; name: string; color: string; min_pgi: number; sort_order: number }
@@ -28,6 +28,7 @@ export default function Assessments({ canManagePhases = false }: { canManagePhas
 
   const [view, setView] = useState<'participants' | 'leaderboard' | 'family'>('participants')
   const [familyFilter, setFamilyFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('Active')
   const [search, setSearch] = useState('')
   const [showManage, setShowManage] = useState(false)
   const [showColours, setShowColours] = useState(false)
@@ -57,7 +58,7 @@ export default function Assessments({ canManagePhases = false }: { canManagePhas
     ] = await Promise.all([
       supabase.from('assessment_phases').select('id, name, is_baseline, sort_order, color').order('sort_order'),
       supabase.from('assessment_components').select('id, phase_id, name, min_score, max_score, weight, sort_order').order('sort_order'),
-      supabase.from('participants').select('id, full_name, family_id').eq('status', 'Active').order('full_name'),
+      supabase.from('participants').select('id, full_name, family_id, status').order('full_name'),
       supabase.from('families').select('id, name, display_color').order('name'),
       supabase.from('assessment_scores').select('id, phase_id, participant_id, notes'),
       supabase.from('assessment_component_scores').select('assessment_score_id, component_id, raw_value'),
@@ -154,7 +155,9 @@ export default function Assessments({ canManagePhases = false }: { canManagePhas
     return families.find((f) => f.id === id)?.display_color ?? '#9ca3af'
   }
 
-  const visibleParticipants = participants.filter((p) => {
+  const statusFilteredParticipants = participants.filter((p) => statusFilter === 'all' || p.status === statusFilter)
+
+  const visibleParticipants = statusFilteredParticipants.filter((p) => {
     const matchesFamily = familyFilter === 'all' || p.family_id === familyFilter
     const matchesSearch = p.full_name.toLowerCase().includes(search.toLowerCase())
     return matchesFamily && matchesSearch
@@ -712,18 +715,27 @@ export default function Assessments({ canManagePhases = false }: { canManagePhas
         )
       })()}
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        {(['participants', 'leaderboard', 'family'] as const).map((v) => (
-          <button
-            key={v}
-            onClick={() => setView(v)}
-            className={`rounded-full px-3 py-1.5 text-sm font-medium ${
-              view === v ? 'bg-[#022269] text-white' : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
-            }`}
-          >
-            {v === 'participants' ? 'By Participant' : v === 'leaderboard' ? 'Growth Leaderboard' : 'Family Growth'}
-          </button>
-        ))}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {(['participants', 'leaderboard', 'family'] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={`rounded-full px-3 py-1.5 text-sm font-medium ${
+                view === v ? 'bg-[#022269] text-white' : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              {v === 'participants' ? 'By Participant' : v === 'leaderboard' ? 'Growth Leaderboard' : 'Family Growth'}
+            </button>
+          ))}
+        </div>
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-md border border-gray-300 px-3 py-2 text-sm">
+          <option value="Active">Active only</option>
+          <option value="On Leave">On Leave only</option>
+          <option value="Left">Left only</option>
+          <option value="Deceased">Deceased only</option>
+          <option value="all">All statuses (everyone ever enrolled)</option>
+        </select>
       </div>
 
       {phases.length === 0 ? (
@@ -754,9 +766,7 @@ export default function Assessments({ canManagePhases = false }: { canManagePhas
                   <th className="px-4 py-3">Name</th>
                   <th className="px-4 py-3">Family</th>
                   {phases.map((p) => (
-                    <th key={p.id} className="px-4 py-3">
-                      <span className="rounded-full border px-2 py-0.5 text-xs font-medium normal-case" style={colorStyle(p.color)}>{p.name}</span>
-                    </th>
+                    <th key={p.id} className="px-4 py-3" style={{ color: p.color }}>{p.name}</th>
                   ))}
                   <th className="px-4 py-3">Latest PGI</th>
                   <th className="px-4 py-3">Trajectory</th>
@@ -833,7 +843,7 @@ export default function Assessments({ canManagePhases = false }: { canManagePhas
             </thead>
             <tbody className="divide-y divide-gray-100">
               {(() => {
-                const rows = participants
+                const rows = statusFilteredParticipants
                   .map((p) => {
                     const latest = latestScored(p.id)
                     if (!latest || !baselinePhase) return null
@@ -888,9 +898,7 @@ export default function Assessments({ canManagePhases = false }: { canManagePhas
                 <th className="px-4 py-3">Family</th>
                 <th className="px-4 py-3">Participants</th>
                 {phases.map((p) => (
-                  <th key={p.id} className="px-4 py-3">
-                    <span className="rounded-full border px-2 py-0.5 text-xs font-medium normal-case" style={colorStyle(p.color)}>{p.name}</span> mean
-                  </th>
+                  <th key={p.id} className="px-4 py-3" style={{ color: p.color }}>{p.name} mean</th>
                 ))}
                 <th className="px-4 py-3">Avg Growth</th>
                 <th className="px-4 py-3">
@@ -905,7 +913,7 @@ export default function Assessments({ canManagePhases = false }: { canManagePhas
             </thead>
             <tbody className="divide-y divide-gray-100">
               {families.map((family) => {
-                const members = participants.filter((p) => p.family_id === family.id)
+                const members = statusFilteredParticipants.filter((p) => p.family_id === family.id)
                 const phaseMeans = phases.map((phase) => {
                   const vals = members.map((m) => pgiFor(phase.id, m.id)).filter((v): v is number => v != null)
                   return vals.length > 0 ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10 : null
