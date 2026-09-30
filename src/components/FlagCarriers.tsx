@@ -736,7 +736,11 @@ export default function FlagCarriers({ canEdit = false }: { canEdit?: boolean })
           </div>
 
           <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-            <h3 className="mb-3 text-sm font-semibold text-gray-900">{label('follow_up')} — who needs it</h3>
+            <h3 className="mb-1 text-sm font-semibold text-gray-900">{label('follow_up')} — who needs it</h3>
+            <p className="mb-3 text-xs text-gray-400">
+              Anyone flagged &quot;{label('follow_up')}: Yes&quot; for {round || 'this round'} shows up here, with their Notes as the reason.
+              {canEdit ? ' Click a name to edit it.' : ''}
+            </p>
             {followUpList.length === 0 ? (
               <p className="text-sm text-gray-400">No one flagged for follow-up this round.</p>
             ) : (
@@ -745,6 +749,7 @@ export default function FlagCarriers({ canEdit = false }: { canEdit?: boolean })
                   <tr>
                     <th className="py-1.5">{label('full_name')}</th>
                     <th className="py-1.5">Why</th>
+                    <th className="py-1.5"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -752,6 +757,16 @@ export default function FlagCarriers({ canEdit = false }: { canEdit?: boolean })
                     <tr key={carrier.id}>
                       <td className="py-1.5 font-medium text-gray-900">{carrier.full_name}</td>
                       <td className="py-1.5 text-gray-600">{u?.notes || '—'}</td>
+                      <td className="py-1.5 text-right">
+                        {canEdit && (
+                          <button
+                            onClick={() => openEntry(carrier.id, round)}
+                            className="text-xs font-medium text-[#022269] hover:underline"
+                          >
+                            Edit
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
