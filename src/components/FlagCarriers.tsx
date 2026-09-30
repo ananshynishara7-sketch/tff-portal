@@ -139,6 +139,9 @@ export default function FlagCarriers({ canEdit = false }: { canEdit?: boolean })
   const [editForm, setEditForm] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
 
+  const [detailForm, setDetailForm] = useState<Record<string, string>>({})
+  const [savingDetails, setSavingDetails] = useState(false)
+
   const [newPerson, setNewPerson] = useState({ first_name: '', last_name: '', family_id: '', main_diploma: '' })
   const [newRound, setNewRound] = useState({ label: '', date: '' })
   const [newYear, setNewYear] = useState('')
@@ -269,18 +272,41 @@ export default function FlagCarriers({ canEdit = false }: { canEdit?: boolean })
     load()
   }
 
-  async function updateCarrierField(id: string, field: string, value: string) {
-    await supabase.from('flag_carriers').update({ [field]: value || null }).eq('id', id)
-    load()
+  function openDetails(carrier: Carrier) {
+    setDetailForm({
+      first_name: carrier.first_name ?? '',
+      last_name: carrier.last_name ?? '',
+      nic: carrier.nic ?? '',
+      date_of_birth: carrier.date_of_birth ?? '',
+      gender: carrier.gender ?? '',
+      mobile: carrier.mobile ?? '',
+      whatsapp: carrier.whatsapp ?? '',
+      email: carrier.email ?? '',
+      address: carrier.address ?? '',
+    })
+    setExpanded(carrier.id)
   }
 
-  async function updateNameField(carrier: Carrier, field: 'first_name' | 'last_name', value: string) {
-    const first = field === 'first_name' ? value : carrier.first_name
-    const last = field === 'last_name' ? value : carrier.last_name
+  async function saveDetails(id: string) {
+    setSavingDetails(true)
+    const first = (detailForm.first_name ?? '').trim()
+    const last = (detailForm.last_name ?? '').trim()
     await supabase
       .from('flag_carriers')
-      .update({ first_name: first, last_name: last, full_name: `${first} ${last}`.trim() })
-      .eq('id', carrier.id)
+      .update({
+        first_name: first,
+        last_name: last,
+        full_name: `${first} ${last}`.trim(),
+        nic: detailForm.nic || null,
+        date_of_birth: detailForm.date_of_birth || null,
+        gender: detailForm.gender || null,
+        mobile: detailForm.mobile || null,
+        whatsapp: detailForm.whatsapp || null,
+        email: detailForm.email || null,
+        address: detailForm.address || null,
+      })
+      .eq('id', id)
+    setSavingDetails(false)
     load()
   }
 
@@ -784,7 +810,10 @@ export default function FlagCarriers({ canEdit = false }: { canEdit?: boolean })
                         {u?.follow_up ? <span className="text-xs font-medium text-red-600">Needs follow-up</span> : <span className="text-xs text-gray-300">—</span>}
                       </td>
                       <td className="px-4 py-2 text-right">
-                        <button onClick={() => setExpanded(isExpanded ? null : c.id)} className="text-xs font-medium text-[#022269] hover:underline">
+                        <button
+                          onClick={() => (isExpanded ? setExpanded(null) : openDetails(c))}
+                          className="text-xs font-medium text-[#022269] hover:underline"
+                        >
                           {isExpanded ? 'Hide' : 'Details'}
                         </button>
                       </td>
@@ -792,18 +821,55 @@ export default function FlagCarriers({ canEdit = false }: { canEdit?: boolean })
                     {isExpanded && (
                       <tr key={`${c.id}-detail`}>
                         <td colSpan={8} className="bg-gray-50 px-4 py-4">
-                          <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                            <DetailField label={label('first_name')} value={c.first_name} onSave={(v) => updateNameField(c, 'first_name', v)} readOnly={!canEdit} />
-                            <DetailField label={label('last_name')} value={c.last_name} onSave={(v) => updateNameField(c, 'last_name', v)} readOnly={!canEdit} />
-                            <DetailField label={label('nic')} value={c.nic} onSave={(v) => updateCarrierField(c.id, 'nic', v)} readOnly={!canEdit} />
-                            <DetailField label={label('date_of_birth')} value={c.date_of_birth} onSave={(v) => updateCarrierField(c.id, 'date_of_birth', v)} readOnly={!canEdit} />
-                            <DetailField label={label('gender')} value={c.gender} onSave={(v) => updateCarrierField(c.id, 'gender', v)} readOnly={!canEdit} />
-                            <DetailField label={label('mobile')} value={c.mobile} onSave={(v) => updateCarrierField(c.id, 'mobile', v)} readOnly={!canEdit} />
-                            <DetailField label={label('whatsapp')} value={c.whatsapp} onSave={(v) => updateCarrierField(c.id, 'whatsapp', v)} readOnly={!canEdit} />
-                            <DetailField label={label('email')} value={c.email} onSave={(v) => updateCarrierField(c.id, 'email', v)} readOnly={!canEdit} />
-                            <DetailField label={label('address')} value={c.address} onSave={(v) => updateCarrierField(c.id, 'address', v)} readOnly={!canEdit} />
-                          </div>
-                          <p className="mb-2 text-xs font-semibold uppercase text-gray-500">History across rounds</p>
+                          {canEdit ? (
+                            <>
+                              <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                                {(
+                                  [
+                                    ['first_name', label('first_name')],
+                                    ['last_name', label('last_name')],
+                                    ['nic', label('nic')],
+                                    ['date_of_birth', label('date_of_birth')],
+                                    ['gender', label('gender')],
+                                    ['mobile', label('mobile')],
+                                    ['whatsapp', label('whatsapp')],
+                                    ['email', label('email')],
+                                    ['address', label('address')],
+                                  ] as [string, string][]
+                                ).map(([key, fieldLabel]) => (
+                                  <div key={key}>
+                                    <label className="mb-1 block text-xs font-medium text-gray-500">{fieldLabel}</label>
+                                    <input
+                                      type="text"
+                                      value={detailForm[key] ?? ''}
+                                      onChange={(e) => setDetailForm((p) => ({ ...p, [key]: e.target.value }))}
+                                      className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm"
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                              <button
+                                onClick={() => saveDetails(c.id)}
+                                disabled={savingDetails}
+                                className="mb-4 rounded-md bg-[#022269] px-4 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+                              >
+                                {savingDetails ? 'Saving...' : 'Save Details'}
+                              </button>
+                            </>
+                          ) : (
+                            <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                              <DetailField label={label('first_name')} value={c.first_name} onSave={() => {}} readOnly />
+                              <DetailField label={label('last_name')} value={c.last_name} onSave={() => {}} readOnly />
+                              <DetailField label={label('nic')} value={c.nic} onSave={() => {}} readOnly />
+                              <DetailField label={label('date_of_birth')} value={c.date_of_birth} onSave={() => {}} readOnly />
+                              <DetailField label={label('gender')} value={c.gender} onSave={() => {}} readOnly />
+                              <DetailField label={label('mobile')} value={c.mobile} onSave={() => {}} readOnly />
+                              <DetailField label={label('whatsapp')} value={c.whatsapp} onSave={() => {}} readOnly />
+                              <DetailField label={label('email')} value={c.email} onSave={() => {}} readOnly />
+                              <DetailField label={label('address')} value={c.address} onSave={() => {}} readOnly />
+                            </div>
+                          )}
+                          <p className="mb-2 text-xs font-semibold uppercase text-gray-500">History across rounds — click a status to edit that round</p>
                           <div className="overflow-x-auto">
                             <table className="w-full text-left text-xs">
                               <thead className="text-gray-400">
@@ -822,7 +888,17 @@ export default function FlagCarriers({ canEdit = false }: { canEdit?: boolean })
                                     <tr key={r} className="border-t border-gray-200">
                                       <td className="pr-4 py-1.5 font-medium text-gray-700">{r}</td>
                                       <td className="pr-4 py-1.5">
-                                        <span className="rounded-full border px-2 py-0.5" style={colorStyle(rchip.color)}>{rchip.label}</span>
+                                        {canEdit ? (
+                                          <button
+                                            onClick={() => openEntry(c.id, r)}
+                                            className="rounded-full border px-2 py-0.5 hover:opacity-80"
+                                            style={colorStyle(rchip.color)}
+                                          >
+                                            {rchip.label}
+                                          </button>
+                                        ) : (
+                                          <span className="rounded-full border px-2 py-0.5" style={colorStyle(rchip.color)}>{rchip.label}</span>
+                                        )}
                                       </td>
                                       <td className="pr-4 py-1.5 text-gray-600">{ru?.program_course || ru?.job_role || '—'}</td>
                                       <td className="pr-4 py-1.5 text-gray-500">{ru?.notes || '—'}</td>
