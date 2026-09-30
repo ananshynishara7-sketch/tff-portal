@@ -13,7 +13,7 @@ const navItems = [
   { label: 'Masterplan Phase 3', href: '/admin/timetable' },
   { label: 'Announcements', href: '/admin/announcements' },
   { label: 'Assessments', href: '/admin/assessments' },
-  { label: 'Flag Carriers', href: '/admin/flag-carriers' },
+  { label: 'The Flag Carriers', href: '/admin/flag-carriers' },
   { label: 'Families', href: '/admin/groups' },
   { label: 'Settings', href: '/admin/settings' },
 ]
