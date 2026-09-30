@@ -602,7 +602,7 @@ export default function FlagCarriers({ canEdit = false }: { canEdit?: boolean })
             onClick={() => setView('roster')}
             className={`rounded px-3 py-1 font-medium ${view === 'roster' ? 'bg-[#022269] text-white' : 'text-gray-600 hover:bg-gray-50'}`}
           >
-            Roster
+            All Details
           </button>
         </div>
         {years.length > 0 && (
@@ -740,6 +740,7 @@ export default function FlagCarriers({ canEdit = false }: { canEdit?: boolean })
               <tr>
                 <th className="px-4 py-3">{label('first_name')}</th>
                 <th className="px-4 py-3">{label('last_name')}</th>
+                <th className="px-4 py-3">{label('gender')}</th>
                 <th className="px-4 py-3">{label('family')}</th>
                 <th className="px-4 py-3">{label('main_diploma')}</th>
                 <th className="px-4 py-3">{round || 'Status'}</th>
@@ -757,6 +758,7 @@ export default function FlagCarriers({ canEdit = false }: { canEdit?: boolean })
                     <tr className="hover:bg-gray-50">
                       <td className="px-4 py-2 font-medium text-gray-900">{c.first_name || '—'}</td>
                       <td className="px-4 py-2 font-medium text-gray-900">{c.last_name || '—'}</td>
+                      <td className="px-4 py-2 text-gray-600">{c.gender ?? '—'}</td>
                       <td className="px-4 py-2">
                         <span className="rounded-full px-2 py-0.5 text-xs font-medium" style={{ backgroundColor: `${familyColor(c.family_id)}1A`, color: familyColor(c.family_id) }}>
                           {familyName(c.family_id)}
@@ -789,7 +791,7 @@ export default function FlagCarriers({ canEdit = false }: { canEdit?: boolean })
                     </tr>
                     {isExpanded && (
                       <tr key={`${c.id}-detail`}>
-                        <td colSpan={7} className="bg-gray-50 px-4 py-4">
+                        <td colSpan={8} className="bg-gray-50 px-4 py-4">
                           <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
                             <DetailField label={label('first_name')} value={c.first_name} onSave={(v) => updateNameField(c, 'first_name', v)} readOnly={!canEdit} />
                             <DetailField label={label('last_name')} value={c.last_name} onSave={(v) => updateNameField(c, 'last_name', v)} readOnly={!canEdit} />
@@ -843,7 +845,7 @@ export default function FlagCarriers({ canEdit = false }: { canEdit?: boolean })
               })}
               {visible.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
+                  <td colSpan={8} className="px-4 py-8 text-center text-gray-400">
                     No Flag Carriers match.
                   </td>
                 </tr>
