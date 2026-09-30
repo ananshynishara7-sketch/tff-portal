@@ -1,5 +1,5 @@
 import DashboardShell from '@/components/DashboardShell'
-import ParticipantsTable from '@/components/ParticipantsTable'
+import FlagCarriers from '@/components/FlagCarriers'
 
 const navItems = [
   { label: 'Dashboard', href: '/admin' },
@@ -15,10 +15,10 @@ const navItems = [
   { label: 'Settings', href: '/admin/settings' },
 ]
 
-export default function ParticipantsPage() {
+export default function AdminFlagCarriersPage() {
   return (
-    <DashboardShell roleLabel="Administration" navItems={navItems}>
-      <ParticipantsTable />
+    <DashboardShell roleLabel="Admin" navItems={navItems}>
+      <FlagCarriers canEdit={false} />
     </DashboardShell>
   )
 }

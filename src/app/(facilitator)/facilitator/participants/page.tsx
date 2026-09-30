@@ -10,6 +10,7 @@ const navItems = [
   { label: 'My To-Do List', href: '/facilitator/todo' },
   { label: 'Announcements', href: '/facilitator/announcements' },
   { label: 'Assessments', href: '/facilitator/assessments' },
+  { label: 'Flag Carriers', href: '/facilitator/flag-carriers' },
   { label: 'Progress Notes', href: '/facilitator/progress' },
 ]
 

@@ -1,5 +1,5 @@
 import DashboardShell from '@/components/DashboardShell'
-import TodoList from '@/components/TodoList'
+import FlagCarriers from '@/components/FlagCarriers'
 
 const navItems = [
   { label: 'Dashboard', href: '/facilitator' },
@@ -14,12 +14,10 @@ const navItems = [
   { label: 'Progress Notes', href: '/facilitator/progress' },
 ]
 
-export default function FacilitatorTodoPage() {
+export default function FacilitatorFlagCarriersPage() {
   return (
     <DashboardShell roleLabel="Facilitator" navItems={navItems}>
-      <h1 className="mb-2 text-2xl font-semibold text-gray-900">My To-Do List</h1>
-      <p className="mb-6 text-sm text-gray-500">Your own task list - add, edit, or mark things done as you go.</p>
-      <TodoList />
+      <FlagCarriers canEdit />
     </DashboardShell>
   )
 }
