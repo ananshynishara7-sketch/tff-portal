@@ -39,6 +39,7 @@ export default function AttendanceMarking({ canClearAll = true }: { canClearAll?
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState<string | null>(null)
   const [clearing, setClearing] = useState(false)
+  const [highlightId, setHighlightId] = useState<string | null>(null)
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -127,6 +128,22 @@ export default function AttendanceMarking({ canClearAll = true }: { canClearAll?
   const visible =
     familyFilter === 'all' ? participants : participants.filter((p) => p.family_id === familyFilter)
 
+  const notMarked = participants.filter((p) => !attendance[p.id])
+
+  function jumpToParticipant(id: string) {
+    if (!id) return
+    const p = participants.find((pp) => pp.id === id)
+    if (!p) return
+    if (familyFilter !== 'all' && p.family_id !== familyFilter) {
+      setFamilyFilter('all')
+    }
+    setHighlightId(id)
+    setTimeout(() => {
+      document.getElementById(`attendance-row-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 50)
+    setTimeout(() => setHighlightId((h) => (h === id ? null : h)), 2500)
+  }
+
   return (
     <div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
@@ -150,6 +167,21 @@ export default function AttendanceMarking({ canClearAll = true }: { canClearAll?
             onChange={(e) => handleDateChange(e.target.value)}
             className="rounded-md border border-gray-300 px-3 py-1.5 text-sm"
           />
+          <label className="text-sm text-gray-600">Not marked yet ({notMarked.length}):</label>
+          <select
+            value=""
+            onChange={(e) => jumpToParticipant(e.target.value)}
+            disabled={loading}
+            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm disabled:opacity-50"
+          >
+            <option value="">{notMarked.length === 0 ? 'Everyone is marked ✓' : '-- Select to jump --'}</option>
+            {notMarked.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.full_name}
+                {p.family_id ? ` (${familyName(p.family_id)})` : ''}
+              </option>
+            ))}
+          </select>
           {canClearAll && (
             <button
               onClick={clearAllForDay}
@@ -180,7 +212,11 @@ export default function AttendanceMarking({ canClearAll = true }: { canClearAll?
             </thead>
             <tbody className="divide-y divide-gray-100">
               {visible.map((p) => (
-                <tr key={p.id}>
+                <tr
+                  key={p.id}
+                  id={`attendance-row-${p.id}`}
+                  className={highlightId === p.id ? 'bg-yellow-50 transition-colors' : 'transition-colors'}
+                >
                   <td className="px-4 py-3 font-medium text-gray-900">{p.full_name}</td>
                   {familyFilter === 'all' && (
                     <td className="px-4 py-3">
