@@ -5,17 +5,17 @@ import DashboardShell from '@/components/DashboardShell'
 import { createClient } from '@/lib/supabase/client'
 
 const navItems = [
-  { label: 'Dashboard', href: '/admin' },
-  { label: 'Participants', href: '/admin/participants' },
-  { label: 'Facilitators', href: '/admin/facilitators' },
-  { label: 'Attendance', href: '/admin/attendance' },
-  { label: 'Leave Requests', href: '/admin/leave-requests' },
-  { label: 'Masterplan Phase 3', href: '/admin/timetable' },
-  { label: 'Announcements', href: '/admin/announcements' },
-  { label: 'Assessments', href: '/admin/assessments' },
-  { label: 'The Flag Carriers', href: '/admin/flag-carriers' },
-  { label: 'Families', href: '/admin/groups' },
-  { label: 'Settings', href: '/admin/settings' },
+  { label: 'Dashboard', href: '/lead-facilitator' },
+  { label: 'Participants', href: '/lead-facilitator/participants' },
+  { label: 'Facilitators', href: '/lead-facilitator/facilitators' },
+  { label: 'Attendance', href: '/lead-facilitator/attendance' },
+  { label: 'Masterplan Phase 3', href: '/lead-facilitator/timetable' },
+  { label: 'My Blocked Time', href: '/lead-facilitator/blocked-time' },
+  { label: 'My To-Do List', href: '/lead-facilitator/todo' },
+  { label: 'Announcements', href: '/lead-facilitator/announcements' },
+  { label: 'Assessments', href: '/lead-facilitator/assessments' },
+  { label: 'The Flag Carriers', href: '/lead-facilitator/flag-carriers' },
+  { label: 'Progress Tracking', href: '/lead-facilitator/progress' },
 ]
 
 // Fixed facilitator list, in the order requested - not tied to login
@@ -83,7 +83,7 @@ function colorStyle(hex: string) {
   }
 }
 
-export default function AdminTimetablePage() {
+export default function LeadFacilitatorTimetablePage() {
   const supabase = createClient()
   const [date, setDate] = useState(todayISO())
   const [allSessions, setAllSessions] = useState<SessionRow[]>([])
@@ -478,7 +478,7 @@ export default function AdminTimetablePage() {
   }
 
   return (
-    <DashboardShell roleLabel="Administration" navItems={navItems}>
+    <DashboardShell roleLabel="Lead Facilitator" navItems={navItems}>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold text-gray-900">Masterplan Phase 3</h1>
         <div className="flex gap-2">
